@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0b0614">
+  <title>Beach Volley Arcade</title>
+  <meta name="description" content="Beachvolleyball-Turnier im Schweizer System – im Stil eines 80er-Jahre-Spielautomaten.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/pyodide/v0.27.7/full/pyodide.js"></script>
+</head>
+<body>
+  <div class="crt"></div>
+
+  <main class="cabinet">
+    <header class="marquee">
+<pre class="logo" aria-label="Beach Volley">
+██████╗ ███████╗ █████╗  ██████╗██╗  ██╗
+██╔══██╗██╔════╝██╔══██╗██╔════╝██║  ██║
+██████╔╝█████╗  ███████║██║     ███████║
+██╔══██╗██╔══╝  ██╔══██║██║     ██╔══██║
+██████╔╝███████╗██║  ██║╚██████╗██║  ██║
+╚═════╝ ╚══════╝╚═╝  ╚═╝ ╚═════╝╚═╝  ╚═╝</pre>
+<pre class="logo logo-2" aria-hidden="true">
+██╗   ██╗ ██████╗ ██╗     ██╗     ███████╗██╗   ██╗
+██║   ██║██╔═══██╗██║     ██║     ██╔════╝╚██╗ ██╔╝
+██║   ██║██║   ██║██║     ██║     █████╗   ╚████╔╝
+╚██╗ ██╔╝██║   ██║██║     ██║     ██╔══╝    ╚██╔╝
+ ╚████╔╝ ╚██████╔╝███████╗███████╗███████╗   ██║
+  ╚═══╝   ╚═════╝ ╚══════╝╚══════╝╚══════╝   ╚═╝</pre>
+      <p class="tagline">* SWISS SYSTEM TOURNAMENT * 1986 *</p>
+    </header>
+
+    <canvas id="scene" width="96" height="40" aria-hidden="true"></canvas>
+
+    <!-- Startbildschirm -->
+    <section id="attract" class="screen">
+      <p id="loading" class="blink">LOADING PYTHON…</p>
+      <button id="start" class="btn btn-big" hidden>PRESS START</button>
+      <p class="small">INSERT COIN · 1–24 PLAYERS · © BEACH CREW</p>
+      <div class="poster-slot"></div>
+    </section>
+
+    <!-- Hauptbildschirm -->
+    <section id="game" class="screen" hidden>
+      <div class="hud">
+        <span id="hud-round">ROUND 0</span>
+        <span id="hud-courts">COURTS 0/0</span>
+        <span id="hud-players">PLAYERS 0</span>
+      </div>
+
+      <nav class="tabs" role="tablist">
+        <button class="tab active" data-tab="terminal">TERMINAL</button>
+        <button class="tab" data-tab="scores">HI-SCORE</button>
+        <button class="tab" data-tab="file">DATEI</button>
+        <button class="tab tab-40" data-tab="jonas">40!</button>
+      </nav>
+
+      <div id="tab-terminal" class="panel">
+        <div id="log" class="log" aria-live="polite"></div>
+        <form id="prompt" class="prompt" autocomplete="off">
+          <span class="caret">&gt;</span>
+          <input id="cmd" type="text" spellcheck="false" autocapitalize="off" enterkeyhint="send"
+                 placeholder="befehl eingeben… (hilfe)">
+        </form>
+        <div class="keys">
+          <button class="key" data-cmd="zeigen">ZEIGEN</button>
+          <button class="key" data-cmd="tabelle">TABELLE</button>
+          <button class="key" data-fill="res ">RES</button>
+          <button class="key" data-cmd="vorschlag">VORSCHLAG</button>
+          <button class="key" data-fill="runde ">RUNDE</button>
+          <button class="key" data-fill="tausch ">TAUSCH</button>
+          <button class="key" data-fill="spieler ">SPIELER</button>
+          <button class="key key-warn" data-cmd="undo">UNDO</button>
+          <button class="key" data-cmd="hilfe">HILFE</button>
+        </div>
+      </div>
+
+      <div id="tab-scores" class="panel" hidden>
+        <h2 class="hiscore-title blink-slow">HIGH SCORES</h2>
+        <p id="scores-sub" class="small"></p>
+        <div id="scores" class="scores"></div>
+      </div>
+
+      <div id="tab-file" class="panel" hidden>
+        <p class="small">TURNIERDATEI · SINGLE SOURCE OF TRUTH · VON HAND BEARBEITBAR</p>
+        <textarea id="file" spellcheck="false"></textarea>
+        <p id="file-msg" class="file-msg"></p>
+        <div class="keys">
+          <button class="key" id="file-save">SPEICHERN</button>
+          <button class="key" id="file-download">DOWNLOAD</button>
+          <label class="key" for="file-upload">UPLOAD</label>
+          <input id="file-upload" type="file" accept=".txt,text/plain" hidden>
+          <button class="key key-warn" id="file-new">NEUES TURNIER</button>
+        </div>
+      </div>
+
+      <div id="tab-jonas" class="panel" hidden>
+        <div class="poster-slot"></div>
+      </div>
+
+      <footer class="footer">
+        <button id="sound" class="link">SOUND: ON</button>
+        <span class="small">DATEN BLEIBEN NUR IN DIESEM BROWSER – BACKUP: DATEI › DOWNLOAD</span>
+      </footer>
+    </section>
+  </main>
+
+
+  <!-- Geburtstags-Filmplakat: Jonas wird 40 (wird in Startbildschirm und Tab 40! eingesetzt) -->
+  <template id="poster-template">
+    <div class="poster">
+      <p class="trailer">IN A WORLD WHERE NOBODY SKIPS LEG DAY…</p>
+      <div class="poster-row">
+<pre class="art hero" aria-label="ASCII-Porträt von Jonas">
+                         ▒▒▒░░▒▒
+                      ░░░░░░░░░░░░░
+                    ░░░░░░░░░░░░░░░░▓
+                    ░░░▒▓▓▓▓█████▓▓░░
+                    ░░▒▓██████████▓░░█
+                    ░░▒▓▓▓████████▓░░
+                   ▒░░░░░▒░▒█▓▒░▒▒▓▒▒▓
+                   ░░▒▓▓██▒▓███████▓▓▓
+                    ░░▒██▓░▒█▓████▓▓█
+                     ░░▓█░░▒▓▓█▓██▓█
+                     ▓░▒▓▒▓███████▒░
+                   ▒░░░░░▓██████▓▓▒░░░▒
+                 ▒░░░░░░░░░▒▒▒▒▒▓█░░░░░
+               ▒░░░░░░░░░░░▒▒▓████░░░░░▒
+              ▒░░░░░░░░▒▒░▒▓██████▓░░░░░░▒
+             ░░░░░░░░░░▒██▓▓██████░░░░░░░░░
+       ▒░░░░░░░░░░░░░░░░▒▓▓███▓▓▒░░░░░░░░░░░░░░▒▒
+     ░░░░░░░░░░░░░░░░░░░░░░░▓░░░░░░░░░░░░░░░░░░░░░▒
+    ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+   ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+ ▒░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░█▓▓▓▒░░░░░░░░░
+░░░░░░░░░░░░░▒▒▒▒▓▒▒▒░░░░░░░░░░░░░░░█▒██▓▓▒▓▒░░░░░░░
+░░░░░░░░░░░░░░░▓██▒░░░░░░░░░░░░░░░░░█▒▓█▓▓▒▓▒░░░░░░░
+░░░░░░░░░░░░░░▒▒▓▓▒▒▒░░░░░░░░░░░░░░░░▒▓█▒▒▒▒░░░░░░░░</pre>
+        <div class="poster-text">
+          <p class="trailer">ONE MAN.</p>
+          <p class="trailer">ONE WHISTLE.</p>
+          <p class="trailer">ZERO MERCY.</p>
+<pre class="art forty" aria-label="40">
+██╗  ██╗ ██████╗
+██║  ██║██╔═████╗
+███████║██║██╔██║
+╚════██║████╔╝██║
+     ██║╚██████╔╝
+     ╚═╝ ╚═════╝</pre>
+          <p class="starring">COACH JONAS</p>
+          <p class="trailer">IS</p>
+          <p class="title">THE TRAINER</p>
+        </div>
+      </div>
+<pre class="art cake" aria-label="Geburtstagskuchen mit Kerzen">
+<span class="flame">      )    )    )    )</span>
+<span class="flame f2">     (    (    (    (</span>
+     _|____|____|____|_
+    |~~~~~~~~~~~~~~~~~~|
+    | BIRTHDAY  BATTLE |
+   _|__________________|_
+  |~~~~~~~~~~~~~~~~~~~~~~|
+  |   COACH JONAS  *40*  |
+  |______________________|</pre>
+      <p class="tagline-small">NO PAIN · NO GAIN · NO MERCY — THIS SUMMER ON COURT 1</p>
+      <p class="small">TIPP: IM TERMINAL «jonas» EINGEBEN</p>
+    </div>
+  </template>
+  <script src="app.js"></script>
+</body>
+</html>
