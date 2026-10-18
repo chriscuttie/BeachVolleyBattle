@@ -49,7 +49,10 @@ Pause:    Hugo  (+2 Punkte)
 Pixel-Szene, 8-Bit-Sounds, Highscore-Tabelle). Darin läuft **derselbe Python-Code** via
 [Pyodide](https://pyodide.org) direkt im Browser – kein Server nötig, funktioniert auch auf dem Handy.
 
-- **TERMINAL**: dieselben Befehle wie im Text-UI, plus Schnellwahl-Tasten.
+- **RUNDE**: Teams per Knopf vorschlagen lassen (Zufall / ähnlich / gemischt), Spieler durch
+  Antippen tauschen, Runde starten. Danach pro Court den Sieger antippen (2:0 oder 2:1) oder
+  Satzresultate eingeben; Teams mit ⇄ tauschen; frühere Runden unten korrigieren.
+- **SPIELER**: hinzufügen (mehrere mit Komma), DA/WEG (abwesend), umbenennen, entfernen.
 - **HI-SCORE**: die Rangliste im Arcade-Look – ideal für den Screenshot in den Chat.
 - **DATEI**: die Turnierdatei, direkt bearbeitbar, mit Download/Upload.
 
@@ -195,7 +198,7 @@ gelöscht (`clear_result`) werden; die Rangliste wird immer aus allen Ergebnisse
 | `beachturnier/tournament.py` | `Tournament`: die zentrale API für ein späteres UI |
 | `beachturnier/textformat.py` | Textformat der Turnierdatei (lesen/schreiben, Fehlermeldungen mit Zeilennummer) |
 | `beachturnier/cli.py` | Text-UI (Start: `python3 turnier.py`) |
-| `web/` | Arcade-Webseite (HTML/CSS/JS + `bridge.py` für Pyodide) |
+| `web/` | Arcade-Webseite (HTML/CSS/JS + `bridge.py` als Schnittstelle zum Python-Backend) |
 | `tools/build_site.py` | Baut die Webseite nach `_site/` |
 | `beachturnier/storage.py` | Turnierdatei atomar speichern/laden |
 

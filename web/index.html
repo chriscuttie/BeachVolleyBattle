@@ -53,30 +53,34 @@
       </div>
 
       <nav class="tabs" role="tablist">
-        <button class="tab active" data-tab="terminal">TERMINAL</button>
+        <button class="tab active" data-tab="round">RUNDE</button>
+        <button class="tab" data-tab="players">SPIELER</button>
         <button class="tab" data-tab="scores">HI-SCORE</button>
         <button class="tab" data-tab="file">DATEI</button>
         <button class="tab tab-40" data-tab="jonas">40!</button>
       </nav>
 
-      <div id="tab-terminal" class="panel">
-        <div id="log" class="log" aria-live="polite"></div>
-        <form id="prompt" class="prompt" autocomplete="off">
-          <span class="caret">&gt;</span>
-          <input id="cmd" type="text" spellcheck="false" autocapitalize="off" enterkeyhint="send"
-                 placeholder="befehl eingeben… (hilfe)">
+      <!-- RUNDE: Teams einteilen, Courts, Resultate -->
+      <div id="tab-round" class="panel">
+        <div id="round-view"></div>
+        <details id="history" class="history" hidden>
+          <summary>FRÜHERE RUNDEN · RESULTATE KORRIGIEREN</summary>
+          <div id="history-list"></div>
+        </details>
+      </div>
+
+      <!-- SPIELER: hinzufügen, abwesend, umbenennen, entfernen -->
+      <div id="tab-players" class="panel" hidden>
+        <form id="add-player" class="add-row" autocomplete="off">
+          <input id="player-name" type="text" placeholder="Name (mehrere mit Komma)" enterkeyhint="done">
+          <button class="key" type="submit">+ ADD</button>
         </form>
-        <div class="keys">
-          <button class="key" data-cmd="zeigen">ZEIGEN</button>
-          <button class="key" data-cmd="tabelle">TABELLE</button>
-          <button class="key" data-fill="res ">RES</button>
-          <button class="key" data-cmd="vorschlag">VORSCHLAG</button>
-          <button class="key" data-fill="runde ">RUNDE</button>
-          <button class="key" data-fill="tausch ">TAUSCH</button>
-          <button class="key" data-fill="spieler ">SPIELER</button>
-          <button class="key key-warn" data-cmd="undo">UNDO</button>
-          <button class="key" data-cmd="hilfe">HILFE</button>
-        </div>
+        <p id="player-count" class="small"></p>
+        <div id="player-list" class="player-list"></div>
+        <form id="rename-tournament" class="add-row" autocomplete="off">
+          <input id="tournament-name" type="text" placeholder="Turniername">
+          <button class="key" type="submit">NAME SETZEN</button>
+        </form>
       </div>
 
       <div id="tab-scores" class="panel" hidden>
@@ -103,11 +107,14 @@
       </div>
 
       <footer class="footer">
+        <button id="undo" class="link">&lt; UNDO</button>
         <button id="sound" class="link">SOUND: ON</button>
         <span class="small">DATEN BLEIBEN NUR IN DIESEM BROWSER – BACKUP: DATEI › DOWNLOAD</span>
       </footer>
     </section>
   </main>
+
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 
 
   <!-- Geburtstags-Filmplakat: Jonas wird 40 (wird in Startbildschirm und Tab 40! eingesetzt) -->

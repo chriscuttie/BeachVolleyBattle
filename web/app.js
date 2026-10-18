@@ -1,6 +1,7 @@
-// Beach Volley Arcade – Browser-Oberfläche für das Python-Text-UI.
-// Python (Pyodide) führt den unveränderten Code aus beachturnier/ aus;
-// die Turnierdatei wird nach jedem Befehl im localStorage gesichert.
+// Beach Volley Arcade – Browser-Oberfläche für das Turnier-Backend.
+// Python (Pyodide) führt den Code aus beachturnier/ aus (über web/bridge.py);
+// die Turnierdatei bleibt die Quelle der Wahrheit und wird nach jeder Aktion
+// im localStorage gesichert.
 
 const PYODIDE_URL = "https://cdn.jsdelivr.net/pyodide/v0.27.7/full/";
 const STORE_FILE = "beachturnier.file";
@@ -8,9 +9,8 @@ const STORE_SOUND = "beachturnier.sound";
 
 const $ = (sel) => document.querySelector(sel);
 let bridge = null;
+let S = null; // aktueller Zustand (bridge.state())
 let fileDirty = false;
-const history = [];
-let historyPos = 0;
 
 function store(key, value) {
   try { localStorage.setItem(key, value); } catch { /* privater Modus o.ä. */ }
@@ -88,11 +88,77 @@ async function boot() {
 function startGame() {
   try { audio = new (window.AudioContext || window.webkitAudioContext)(); } catch { audio = null; }
   sfx.coin();
+  bridge.start(recall(STORE_FILE) || null);
   $("#attract").hidden = true;
   $("#game").hidden = false;
-  print(bridge.start(recall(STORE_FILE) || null));
-  persist();
-  $("#cmd").focus();
+  refresh();
+  if (!S.error && S.players.length < 4) showTab("players");
+}
+
+// ------------------------------------------------------------------ Zustand & Aktionen
+
+function refresh() {
+  S = JSON.parse(bridge.state());
+  store(STORE_FILE, bridge.read_file());
+  renderHud();
+  renderRound();
+  renderPlayers();
+  if (!$("#tab-scores").hidden) renderScores();
+  $("#undo").disabled = !S.can_undo;
+}
+
+/** Aktion im Backend ausführen; Fehler/Erfolg als Toast, danach neu zeichnen. */
+function act(name, args = {}, { quiet = false } = {}) {
+  const res = JSON.parse(bridge.api(name, JSON.stringify(args)));
+  if (!res.ok) {
+    toast(res.error, "err");
+    sfx.error();
+  } else if (res.message && !quiet) {
+    toast(res.message, "ok");
+  }
+  refresh();
+  return res;
+}
+
+const currentRound = () => (S && S.rounds.length ? S.rounds[S.rounds.length - 1] : null);
+const runningRound = () => { const r = currentRound(); return r && !r.finished ? r : null; };
+const doneCount = (r) => r.matches.filter((m) => m.result).length;
+const pname = (id) => (S.players.find((p) => p.id === id) || { name: "?" }).name;
+const teamName = (team) => team.map(pname).join(" / ");
+const activePlayers = () => S.players.filter((p) => p.active);
+
+let toastTimer = null;
+function toast(text, kind = "ok") {
+  const t = $("#toast");
+  t.textContent = text;
+  t.className = "toast " + kind;
+  t.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { t.hidden = true; }, kind === "err" ? 4500 : 2600);
+}
+
+/** Kleiner DOM-Helfer: el("div", {class: "x", onclick: fn}, "Text", kindElement) */
+function el(tag, attrs = {}, ...children) {
+  const node = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (v === false || v == null) continue;
+    if (k.startsWith("on")) node.addEventListener(k.slice(2), v);
+    else if (k === "class") node.className = v;
+    else node.setAttribute(k, v === true ? "" : v);
+  }
+  for (const c of children.flat()) if (c != null && c !== false) node.append(c);
+  return node;
+}
+
+function renderHud() {
+  if (S.error) {
+    $("#hud-round").textContent = "DATEI-FEHLER";
+    return;
+  }
+  const r = currentRound();
+  $("#hud-round").textContent = `ROUND ${r ? r.number : 0}`;
+  $("#hud-courts").textContent = `COURTS ${r ? doneCount(r) : 0}/${r ? r.matches.length : 0}`;
+  $("#hud-players").textContent = `PLAYERS ${S.error ? 0 : activePlayers().length}`;
 }
 
 // ------------------------------------------------------------------ 40! Jonas
@@ -110,30 +176,8 @@ const TRAINER_QUOTES = [
   "«ADRIAAAN! … ÄH, NÄCHSTE RUNDE!»",
 ];
 
-const BIRTHDAY_ART = `
-      )    )    )    )
-     (    (    (    (
-     _|____|____|____|_
-    |~~~~~~~~~~~~~~~~~~|
-    | BIRTHDAY  BATTLE |
-   _|__________________|_
-  |~~~~~~~~~~~~~~~~~~~~~~|
-  |   COACH JONAS  *40*  |
-  |______________________|
-
-  ██╗  ██╗ ██████╗
-  ██║  ██║██╔═████╗
-  ███████║██║██╔██║
-  ╚════██║████╔╝██║
-       ██║╚██████╔╝
-       ╚═╝ ╚═════╝
-
-  ★ 40 JAHRE. 0 PAUSEN. ★
-  LET THE BIRTHDAY BATTLE BEGIN!`;
-
-function trainerSays() {
-  const quote = TRAINER_QUOTES[Math.floor(Math.random() * TRAINER_QUOTES.length)];
-  print(`COACH JONAS (40): ${quote}`, "jonas");
+function quoteFor(n) {
+  return TRAINER_QUOTES[(n * 7) % TRAINER_QUOTES.length];
 }
 
 function mountPosters() {
@@ -141,74 +185,314 @@ function mountPosters() {
   document.querySelectorAll(".poster-slot").forEach((slot) => slot.replaceChildren(tpl.content.cloneNode(true)));
 }
 
-// ------------------------------------------------------------------ Terminal
+// ------------------------------------------------------------------ RUNDE
 
-const LINE_CLASSES = [
-  [/^(Fehler|Unbekannter Befehl|TILT)/, "err"],
-  [/^(Achtung|Abgebrochen)|nicht eindeutig/, "warn"],
-  [/^===|Rangliste|^Vorschlag:|^Befehle/, "head"],
-  [/^Court \d|^Freilos:|^Pause:/, "court"],
-  [/gewinnt|komplett|erfasst|Rückgängig|angelegt|GAME OVER/, "ok"],
-  [/^\(Zahl|^Sp=|^ Rg /, "dim"],
-];
+let draft = null;    // Team-Entwurf für die nächste Runde: {teams: [[id,id],…], resting: [id]}
+let picked = null;   // ausgewählter Spieler im Entwurf: {list: "teams"|"resting", i, k}
+let swapPick = null; // ausgewähltes Team zum Tauschen: {match: id|"bye", side: "a"|"b"}
+let openSets = null; // Partie, bei der gerade Satzresultate eingegeben werden
 
-function print(text, cls) {
-  const log = $("#log");
-  for (const line of text.replace(/\n$/, "").split("\n")) {
-    const div = document.createElement("div");
-    div.textContent = line || " ";
-    const found = cls || (LINE_CLASSES.find(([re]) => re.test(line)) || [])[1];
-    if (found) div.className = found;
-    log.appendChild(div);
-  }
-  while (log.childElementCount > 1500) log.firstChild.remove();
-  log.scrollTop = log.scrollHeight;
-}
-
-function run(line) {
-  line = line.trim();
-  if (!line || !bridge) return;
-  history.push(line);
-  historyPos = history.length;
-  print("> " + line, "echo");
-  if (/^(jonas|coach|40|geburtstag|birthday battle)$/i.test(line)) {
-    print(BIRTHDAY_ART, "jonas");
-    sfx.birthday();
+function renderRound() {
+  const view = $("#round-view");
+  view.replaceChildren();
+  if (S.error) {
+    view.append(el("p", { class: "empty" }, "TURNIERDATEI FEHLERHAFT – BITTE IM TAB DATEI KORRIGIEREN"),
+      el("p", { class: "err-text" }, S.error));
+    $("#history").hidden = true;
     return;
   }
-  if (/^(ende|exit|quit)$/i.test(line)) {
-    print("GAME OVER – alles gespeichert. INSERT COIN TO CONTINUE.");
+  const running = runningRound();
+  view.append(running ? courtsView(running) : setupView());
+  renderHistory(running);
+}
+
+// ---- Nächste Runde einteilen
+
+function setupView() {
+  const box = el("div", { class: "setup" });
+  const last = currentRound();
+  const next = last ? last.number + 1 : 1;
+  if (last) {
+    box.append(el("div", { class: "complete" },
+      el("p", { class: "complete-title blink-slow" }, `ROUND ${last.number} COMPLETE!`),
+      el("p", { class: "quote" }, `COACH JONAS (40): ${quoteFor(last.number)}`)));
+  }
+  if (activePlayers().length < 4) {
+    box.append(el("p", { class: "empty" }, "INSERT PLAYERS – MINDESTENS 4 AKTIVE SPIELER"),
+      el("button", { class: "key", onclick: () => showTab("players") }, "ZU DEN SPIELERN"));
+    return box;
+  }
+  box.append(el("h3", { class: "view-title" }, `ROUND ${next} · TEAMS`));
+  const modes = [["random", "ZUFALL"], ["similar", "ÄHNLICH"], ["balanced", "GEMISCHT"]];
+  box.append(el("div", { class: "keys modes" },
+    modes.map(([mode, label]) => el("button", {
+      class: "key" + (draft && draft.mode === mode ? " key-on" : ""),
+      onclick: () => makeDraft(mode),
+    }, label))));
+  if (!draft || !draftValid()) makeDraft(next === 1 ? "random" : "similar", true);
+  if (!draft) return box;
+
+  box.append(el("p", { class: "hint" },
+    "Tippe zwei Spieler an, um sie zu tauschen. Die Gegner bestimmt das System beim Start."));
+  const grid = el("div", { class: "draft" });
+  draft.teams.forEach((team, i) => {
+    grid.append(el("div", { class: "draft-team" },
+      el("span", { class: "label" }, `TEAM ${i + 1}`),
+      el("div", { class: "chips" }, team.map((id, k) => chip(id, "teams", i, k)))));
+  });
+  box.append(grid);
+  if (draft.resting.length) {
+    box.append(el("div", { class: "draft-team resting" },
+      el("span", { class: "label" }, `PAUSE (+${S.bye_points})`),
+      el("div", { class: "chips" }, draft.resting.map((id, k) => chip(id, "resting", k, null)))));
+  }
+  if (draft.teams.length % 2) {
+    box.append(el("p", { class: "hint" }, "Ungerade Anzahl Teams: ein Team bekommt ein Freilos."));
+  }
+  box.append(el("button", {
+    class: "btn btn-go",
+    onclick: () => {
+      const res = act("start_round", { teams: draft.teams });
+      if (res.ok) { draft = null; sfx.start(); }
+    },
+  }, `▶ ROUND ${next} STARTEN`));
+  return box;
+}
+
+function makeDraft(mode, silent = false) {
+  const res = JSON.parse(bridge.api("suggest", JSON.stringify({ mode })));
+  if (!res.ok) {
+    if (!silent) { toast(res.error, "err"); sfx.error(); }
+    draft = null;
+    return;
+  }
+  draft = { mode, teams: res.teams, resting: res.resting };
+  picked = null;
+  if (!silent) { sfx.blip(); renderRound(); }
+}
+
+/** Entwurf passt nicht mehr, wenn sich die aktiven Spieler geändert haben. */
+function draftValid() {
+  const ids = [...draft.teams.flat(), ...draft.resting].sort().join();
+  return ids === activePlayers().map((p) => p.id).sort().join();
+}
+
+function chip(id, list, i, k) {
+  const isPicked = picked && picked.list === list && picked.i === i && picked.k === k;
+  return el("button", {
+    class: "chip" + (isPicked ? " picked" : "") + (list === "resting" ? " chip-rest" : ""),
+    onclick: () => {
+      if (!picked) {
+        picked = { list, i, k };
+      } else {
+        const get = (p) => (p.list === "teams" ? draft.teams[p.i][p.k] : draft.resting[p.i]);
+        const set = (p, v) => { if (p.list === "teams") draft.teams[p.i][p.k] = v; else draft.resting[p.i] = v; };
+        const a = get(picked);
+        const b = get({ list, i, k });
+        set(picked, b);
+        set({ list, i, k }, a);
+        picked = null;
+      }
+      sfx.blip();
+      renderRound();
+    },
+  }, pname(id));
+}
+
+// ---- Laufende Runde: Courts und Resultate
+
+function courtsView(rnd) {
+  const box = el("div", { class: "courts" });
+  box.append(el("h3", { class: "view-title" },
+    `ROUND ${rnd.number}${rnd.manual ? " (ANGEPASST)" : ""} · ${doneCount(rnd)}/${rnd.matches.length} COURTS`));
+  box.append(el("p", { class: "hint" },
+    "Sieger antippen: 2:0 oder 2:1. ⇄ bei zwei Teams = Teams tauschen. (Zahl) = Teampunkte vor der Runde."));
+  rnd.matches.forEach((m) => box.append(matchCard(m, true)));
+  if (rnd.bye_team) {
+    box.append(el("div", { class: "card bye" },
+      el("span", { class: "label" }, `FREILOS (+${S.bye_points})`),
+      el("span", { class: "team-name" }, teamName(rnd.bye_team)),
+      swapButton("bye", "")));
+  }
+  if (rnd.resting.length) {
+    box.append(el("div", { class: "card bye" },
+      el("span", { class: "label" }, `PAUSE (+${S.bye_points})`),
+      el("span", { class: "team-name" }, rnd.resting.map(pname).join(", "))));
+  }
+  box.append(el("div", { class: "keys" },
+    el("button", {
+      class: "key key-warn",
+      onclick: () => {
+        const msg = doneCount(rnd)
+          ? `Runde ${rnd.number} hat schon ${doneCount(rnd)} Resultat(e). Wirklich löschen?`
+          : `Runde ${rnd.number} löschen und Teams neu einteilen?`;
+        if (confirm(msg)) act("cancel_round");
+      },
+    }, "RUNDE VERWERFEN")));
+  return box;
+}
+
+function matchCard(m, current) {
+  const r = m.result;
+  const side = (team, strength, letter) => {
+    const won = r && (letter === "a" ? r.sets_a > r.sets_b : r.sets_b > r.sets_a);
+    const lost = r && !won;
+    return el("div", { class: "side" + (won ? " won" : "") + (lost ? " lost" : "") },
+      el("div", { class: "team-line" },
+        el("span", { class: "team-name" }, teamName(team)),
+        current ? el("span", { class: "strength" }, `(${strength})`) : null,
+        current ? swapButton(m.id, letter) : null),
+      r ? null : el("div", { class: "win-keys" },
+        el("button", { class: "key key-win", onclick: () => record(m, letter === "a" ? "2:0" : "0:2") }, "2:0"),
+        el("button", { class: "key key-win", onclick: () => record(m, letter === "a" ? "2:1" : "1:2") }, "2:1")));
+  };
+  const card = el("div", { class: "card match" + (r ? " done" : "") },
+    el("div", { class: "card-head" },
+      el("span", { class: "label" }, current ? `COURT ${m.court}` : m.id.replace("-", " · ")),
+      r ? el("span", { class: "result" }, resultText(r)) : null),
+    el("div", { class: "sides" },
+      side(m.team_a, m.strength_a, "a"),
+      el("span", { class: "vs" }, "VS"),
+      side(m.team_b, m.strength_b, "b")));
+  if (openSets === m.id) {
+    const input = el("input", { type: "text", class: "sets-input", inputmode: "numeric",
+      placeholder: "21:18 17:21 15:12 (aus Sicht links)", value: r && r.set_scores ? resultText(r) : "" });
+    const form = el("form", { class: "add-row", onsubmit: (e) => { e.preventDefault(); record(m, input.value); } },
+      input, el("button", { class: "key", type: "submit" }, "OK"));
+    card.append(form);
+    setTimeout(() => input.focus(), 0);
+  }
+  card.append(el("div", { class: "card-actions" },
+    el("button", { class: "link", onclick: () => { openSets = openSets === m.id ? null : m.id; renderRound(); } },
+      "SATZRESULTATE"),
+    r ? el("button", { class: "link", onclick: () => act("clear_result", { match_id: m.id }) }, "RESULTAT LÖSCHEN") : null));
+  return card;
+}
+
+function resultText(r) {
+  return r.set_scores ? r.set_scores.map(([a, b]) => `${a}:${b}`).join("  ") : `${r.sets_a}:${r.sets_b}`;
+}
+
+function record(m, result) {
+  const wasRunning = runningRound();
+  const res = act("record_result", { match_id: m.id, result });
+  if (!res.ok) return;
+  openSets = null;
+  const r = currentRound();
+  if (wasRunning && r.number === wasRunning.number && r.finished) {
     sfx.fanfare();
+    toast(`ROUND ${r.number} COMPLETE! ${quoteFor(r.number)}`, "jonas");
+  } else {
+    sfx.coin();
+  }
+}
+
+function swapButton(match, side) {
+  const isPicked = swapPick && swapPick.match === match && swapPick.side === side;
+  return el("button", {
+    class: "swap" + (isPicked ? " picked" : ""),
+    title: "Team tauschen",
+    onclick: () => {
+      if (!swapPick) {
+        swapPick = { match, side };
+        toast("Jetzt das zweite Team antippen (⇄)", "ok");
+        renderRound();
+        return;
+      }
+      const first = swapPick;
+      swapPick = null;
+      if (first.match === match && first.side === side) { renderRound(); return; }
+      const rnd = runningRound();
+      const touched = rnd.matches.filter((x) => (x.id === first.match || x.id === match) && x.result);
+      if (touched.length && !confirm("Betroffene Partien haben schon Resultate, die verloren gehen. Weiter?")) {
+        renderRound();
+        return;
+      }
+      const res = act("swap_teams", { match_a: first.match, side_a: first.side, match_b: match, side_b: side,
+        force: touched.length > 0 }, { quiet: true });
+      if (res.ok) { toast("Teams getauscht", "ok"); sfx.blip(); }
+    },
+  }, "⇄");
+}
+
+// ---- Frühere Runden (Korrekturen)
+
+function renderHistory(running) {
+  const past = S.rounds.filter((r) => r !== running).reverse();
+  const box = $("#history");
+  box.hidden = past.length === 0;
+  const list = $("#history-list");
+  list.replaceChildren();
+  for (const rnd of past) {
+    list.append(el("h4", { class: "history-title" }, `ROUND ${rnd.number}${rnd.manual ? " (ANGEPASST)" : ""}`));
+    rnd.matches.forEach((m) => list.append(matchCard(m, false)));
+    const out = [rnd.bye_team ? `Freilos: ${teamName(rnd.bye_team)}` : null,
+      rnd.resting.length ? `Pause: ${rnd.resting.map(pname).join(", ")}` : null].filter(Boolean);
+    if (out.length) list.append(el("p", { class: "hint" }, out.join(" · ")));
+  }
+}
+
+// ------------------------------------------------------------------ SPIELER
+
+function renderPlayers() {
+  const list = $("#player-list");
+  list.replaceChildren();
+  if (S.error) return;
+  const active = activePlayers().length;
+  $("#player-count").textContent =
+    `${active} AKTIV · ${S.players.length - active} ABWESEND · SORTIERT NACH RANG`;
+  if (document.activeElement !== $("#tournament-name")) $("#tournament-name").value = S.name;
+  if (!S.players.length) {
+    list.append(el("p", { class: "empty" }, "NO PLAYERS YET – OBEN NAMEN EINGEBEN"));
     return;
   }
-  const out = bridge.run(line);
-  print(out);
-  persist();
-  if (/^Fehler|^Unbekannter/m.test(out)) sfx.error();
-  else if (/komplett/.test(out)) { sfx.fanfare(); trainerSays(); }
-  else if (/^=== Runde/m.test(out) && /^runde/i.test(line)) sfx.start();
-  else sfx.blip();
-  if (!$("#tab-scores").hidden) renderScores();
-}
-
-function persist() {
-  store(STORE_FILE, bridge.read_file());
-  renderHud();
-}
-
-function info() {
-  return JSON.parse(bridge.info());
-}
-
-function renderHud() {
-  const i = info();
-  if (i.error) {
-    $("#hud-round").textContent = "DATEI-FEHLER";
-    return;
+  const players = [...S.players].sort((a, b) => a.rank - b.rank || a.name.localeCompare(b.name));
+  for (const p of players) {
+    list.append(el("div", { class: "player" + (p.active ? "" : " absent") },
+      el("span", { class: "rank" }, `${p.rank}.`),
+      el("span", { class: "pname" }, p.name),
+      el("span", { class: "pts" }, `${p.points} P`),
+      el("button", {
+        class: "key key-small " + (p.active ? "key-here" : "key-away"),
+        title: p.active ? "Als abwesend markieren" : "Wieder dabei",
+        onclick: () => { act("set_active", { player_id: p.id, active: !p.active }, { quiet: true }); draft = null; sfx.blip(); },
+      }, p.active ? "DA" : "WEG"),
+      el("button", {
+        class: "key key-small",
+        title: "Umbenennen",
+        onclick: () => {
+          const name = prompt("Neuer Name:", p.name);
+          if (name && name.trim() !== p.name) act("rename_player", { player_id: p.id, name });
+        },
+      }, "✎"),
+      el("button", {
+        class: "key key-small key-warn",
+        title: "Entfernen",
+        onclick: () => {
+          if (p.played) {
+            toast(`${p.name} hat schon gespielt – stattdessen auf WEG setzen`, "err");
+            sfx.error();
+          } else if (confirm(`${p.name} entfernen?`)) {
+            act("remove_player", { player_id: p.id });
+            draft = null;
+          }
+        },
+      }, "✕")));
   }
-  $("#hud-round").textContent = `ROUND ${i.round}`;
-  $("#hud-courts").textContent = `COURTS ${i.done}/${i.total}`;
-  $("#hud-players").textContent = `PLAYERS ${i.players}`;
+}
+
+function addPlayers(e) {
+  e.preventDefault();
+  const input = $("#player-name");
+  const names = input.value.split(/[,\n]/).map((x) => x.trim()).filter(Boolean);
+  if (!names.length) return;
+  const res = act("add_players", { names });
+  if (res.ok) {
+    input.value = "";
+    draft = null;
+    sfx.coin();
+  }
+  input.focus();
 }
 
 // ------------------------------------------------------------------ Highscore
@@ -218,15 +502,16 @@ const ORDINAL = (n) => n + (n % 10 === 1 && n % 100 !== 11 ? "ST" : n % 10 === 2
 const RANK_COLORS = ["var(--yellow)", "var(--orange)", "var(--magenta)", "var(--cyan)", "var(--green)"];
 
 function renderScores() {
-  const i = info();
+  const i = S;
   const box = $("#scores");
   box.replaceChildren();
   if (i.error) {
     box.innerHTML = '<p class="empty">DATEI-FEHLER – SIEHE TAB DATEI</p>';
     return;
   }
-  $("#scores-sub").textContent = i.round
-    ? `${i.name.toUpperCase()} · ROUND ${i.round} · ${i.done}/${i.total} COURTS`
+  const cur = currentRound();
+  $("#scores-sub").textContent = cur
+    ? `${i.name.toUpperCase()} · ROUND ${cur.number} · ${doneCount(cur)}/${cur.matches.length} COURTS`
     : i.name.toUpperCase();
   if (!i.standings.length) {
     box.innerHTML = '<p class="empty">NO PLAYERS YET – INSERT PLAYERS</p>';
@@ -266,7 +551,8 @@ function loadFileTab() {
 function saveFileTab() {
   const err = bridge.write_file($("#file").value);
   fileDirty = false;
-  persist();
+  draft = null;
+  refresh();
   const msg = $("#file-msg");
   msg.className = "file-msg " + (err ? "err" : "ok");
   msg.textContent = err ? "FEHLER: " + err : "GESPEICHERT ✓";
@@ -275,7 +561,7 @@ function saveFileTab() {
 
 function download() {
   const text = bridge.read_file();
-  const name = (info().name || "turnier").toLowerCase().replace(/[^a-z0-9äöü]+/g, "-").replace(/^-|-$/g, "");
+  const name = (S.name || "turnier").toLowerCase().replace(/[^a-z0-9äöü]+/g, "-").replace(/^-|-$/g, "");
   const url = URL.createObjectURL(new Blob([text], { type: "text/plain;charset=utf-8" }));
   const a = Object.assign(document.createElement("a"), { href: url, download: (name || "turnier") + ".txt" });
   document.body.appendChild(a);
@@ -295,12 +581,16 @@ function upload(file) {
 
 function newTournament() {
   if (!confirm("Neues Turnier starten? Die aktuelle Datei wird gelöscht (vorher DOWNLOAD als Backup!).")) return;
-  print(bridge.start(null));
-  persist();
+  bridge.start(null);
+  draft = null;
+  refresh();
   loadFileTab();
+  toast("Neues Turnier angelegt", "ok");
 }
 
 // ------------------------------------------------------------------ Tabs
+
+const TABS = ["round", "players", "scores", "file", "jonas"];
 
 function showTab(name) {
   if (fileDirty && !$("#tab-file").hidden && name !== "file") {
@@ -308,11 +598,14 @@ function showTab(name) {
     else fileDirty = false;
   }
   document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t.dataset.tab === name));
-  for (const tab of ["terminal", "scores", "file", "jonas"]) $("#tab-" + tab).hidden = tab !== name;
+  for (const tab of TABS) $("#tab-" + tab).hidden = tab !== name;
+  swapPick = null;
+  picked = null;
+  if (name === "round") renderRound();
   if (name === "scores") renderScores();
   if (name === "file") loadFileTab();
   if (name === "jonas") sfx.birthday();
-  if (name === "terminal") $("#cmd").focus();
+  if (name === "players" && S && !S.players.length) $("#player-name").focus();
   sfx.blip();
 }
 
@@ -457,27 +750,17 @@ function animate(time) {
 // ------------------------------------------------------------------ Events
 
 $("#start").addEventListener("click", startGame);
-$("#prompt").addEventListener("submit", (e) => {
-  e.preventDefault();
-  run($("#cmd").value);
-  $("#cmd").value = "";
-});
-$("#cmd").addEventListener("keydown", (e) => {
-  if (e.key === "ArrowUp" && historyPos > 0) {
-    $("#cmd").value = history[--historyPos];
-    e.preventDefault();
-  } else if (e.key === "ArrowDown") {
-    historyPos = Math.min(history.length, historyPos + 1);
-    $("#cmd").value = history[historyPos] || "";
-    e.preventDefault();
-  }
-});
-document.querySelectorAll(".key[data-cmd]").forEach((b) => b.addEventListener("click", () => run(b.dataset.cmd)));
-document.querySelectorAll(".key[data-fill]").forEach((b) => b.addEventListener("click", () => {
-  $("#cmd").value = b.dataset.fill;
-  $("#cmd").focus();
-}));
 document.querySelectorAll(".tab").forEach((b) => b.addEventListener("click", () => showTab(b.dataset.tab)));
+$("#add-player").addEventListener("submit", addPlayers);
+$("#rename-tournament").addEventListener("submit", (e) => {
+  e.preventDefault();
+  act("set_name", { name: $("#tournament-name").value });
+  $("#tournament-name").blur();
+});
+$("#undo").addEventListener("click", () => {
+  const res = act("undo");
+  if (res.ok) { draft = null; sfx.blip(); }
+});
 $("#file").addEventListener("input", () => { fileDirty = true; });
 $("#file-save").addEventListener("click", saveFileTab);
 $("#file-download").addEventListener("click", download);
