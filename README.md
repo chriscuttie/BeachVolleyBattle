@@ -49,8 +49,9 @@ Pause:    Hugo  (+2 Punkte)
 Pixel-Szene, 8-Bit-Sounds, Highscore-Tabelle). Darin läuft **derselbe Python-Code** via
 [Pyodide](https://pyodide.org) direkt im Browser – kein Server nötig, funktioniert auch auf dem Handy.
 
-- **RUNDE**: Teams per Knopf vorschlagen lassen (Zufall / ähnlich / gemischt), Spieler durch
-  Antippen tauschen, Runde starten. Danach pro Court den Sieger antippen (2:0 oder 2:1) oder
+- **RUNDE**: Teams per Knopf vorschlagen lassen (Zufall / ähnlich / gemischt) oder mit
+  **SELBST** von Hand bilden (zwei Spieler ohne Team antippen = neues Team, ✕ löst ein Team auf),
+  Spieler durch Antippen tauschen, Runde starten. Die Gegner bestimmt immer das System. Danach pro Court den Sieger antippen (2:0 oder 2:1) oder
   Satzresultate eingeben; Teams mit ⇄ tauschen; frühere Runden unten korrigieren.
 - **SPIELER**: hinzufügen (mehrere mit Komma), DA/WEG (abwesend), umbenennen, entfernen.
 - **HI-SCORE**: die Rangliste im Arcade-Look – ideal für den Screenshot in den Chat.

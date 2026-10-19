@@ -223,7 +223,7 @@ function setupView() {
     return box;
   }
   box.append(el("h3", { class: "view-title" }, `ROUND ${next} · TEAMS`));
-  const modes = [["random", "ZUFALL"], ["similar", "ÄHNLICH"], ["balanced", "GEMISCHT"]];
+  const modes = [["random", "ZUFALL"], ["similar", "ÄHNLICH"], ["balanced", "GEMISCHT"], ["manual", "SELBST"]];
   box.append(el("div", { class: "keys modes" },
     modes.map(([mode, label]) => el("button", {
       class: "key" + (draft && draft.mode === mode ? " key-on" : ""),
@@ -232,18 +232,22 @@ function setupView() {
   if (!draft || !draftValid()) makeDraft(next === 1 ? "random" : "similar", true);
   if (!draft) return box;
 
-  box.append(el("p", { class: "hint" },
-    "Tippe zwei Spieler an, um sie zu tauschen. Die Gegner bestimmt das System beim Start."));
+  box.append(el("p", { class: "hint" }, draft.mode === "manual"
+    ? "Tippe zwei Spieler ohne Team an: sie werden ein Team. Spieler im Team antippen und dann einen anderen: "
+      + "die beiden tauschen. ✕ löst ein Team auf. Die Gegner bestimmt das System beim Start."
+    : "Tippe zwei Spieler an, um sie zu tauschen. ✕ löst ein Team auf. Die Gegner bestimmt das System beim Start."));
   const grid = el("div", { class: "draft" });
   draft.teams.forEach((team, i) => {
     grid.append(el("div", { class: "draft-team" },
-      el("span", { class: "label" }, `TEAM ${i + 1}`),
+      el("div", { class: "draft-head" },
+        el("span", { class: "label" }, `TEAM ${i + 1}`),
+        el("button", { class: "swap", title: "Team auflösen", onclick: () => dissolveTeam(i) }, "✕")),
       el("div", { class: "chips" }, team.map((id, k) => chip(id, "teams", i, k)))));
   });
   box.append(grid);
   if (draft.resting.length) {
     box.append(el("div", { class: "draft-team resting" },
-      el("span", { class: "label" }, `PAUSE (+${S.bye_points})`),
+      el("span", { class: "label" }, `OHNE TEAM · PAUSIERT (+${S.bye_points})`),
       el("div", { class: "chips" }, draft.resting.map((id, k) => chip(id, "resting", k, null)))));
   }
   if (draft.teams.length % 2) {
@@ -251,15 +255,34 @@ function setupView() {
   }
   box.append(el("button", {
     class: "btn btn-go",
+    disabled: draft.teams.length < 2,
     onclick: () => {
+      const n = draft.resting.length;
+      if (n > 1 && !confirm(`${n} Spieler ohne Team pausieren diese Runde (+${S.bye_points} Punkte). Trotzdem starten?`)) return;
       const res = act("start_round", { teams: draft.teams });
       if (res.ok) { draft = null; sfx.start(); }
     },
-  }, `▶ ROUND ${next} STARTEN`));
+  }, draft.teams.length < 2 ? "MINDESTENS 2 TEAMS BILDEN" : `▶ ROUND ${next} STARTEN`));
   return box;
 }
 
+function dissolveTeam(i) {
+  draft.resting.push(...draft.teams[i]);
+  draft.teams.splice(i, 1);
+  picked = null;
+  sfx.blip();
+  renderRound();
+}
+
 function makeDraft(mode, silent = false) {
+  if (mode === "manual") {
+    // Alle aktiven Spieler (nach Rang) ohne Team – der Turnierleiter teilt selbst ein
+    const ids = [...activePlayers()].sort((a, b) => a.rank - b.rank || a.name.localeCompare(b.name)).map((p) => p.id);
+    draft = { mode, teams: [], resting: ids };
+    picked = null;
+    if (!silent) { sfx.blip(); renderRound(); }
+    return;
+  }
   const res = JSON.parse(bridge.api("suggest", JSON.stringify({ mode })));
   if (!res.ok) {
     if (!silent) { toast(res.error, "err"); sfx.error(); }
@@ -284,6 +307,13 @@ function chip(id, list, i, k) {
     onclick: () => {
       if (!picked) {
         picked = { list, i, k };
+      } else if (picked.list === "resting" && list === "resting" && picked.i !== i) {
+        // Zwei Spieler ohne Team -> neues Team
+        const a = draft.resting[picked.i];
+        const b = draft.resting[i];
+        draft.resting = draft.resting.filter((_, idx) => idx !== picked.i && idx !== i);
+        draft.teams.push([a, b]);
+        picked = null;
       } else {
         const get = (p) => (p.list === "teams" ? draft.teams[p.i][p.k] : draft.resting[p.i]);
         const set = (p, v) => { if (p.list === "teams") draft.teams[p.i][p.k] = v; else draft.resting[p.i] = v; };
