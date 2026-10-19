@@ -113,6 +113,7 @@
 
       <footer class="footer">
         <button id="undo" class="link">&lt; UNDO</button>
+        <button id="show-open" class="link link-show">▶ SHOW</button>
         <button id="sound" class="link">SOUND: ON</button>
         <span class="small">DATEN BLEIBEN NUR IN DIESEM BROWSER – BACKUP: DATEI › DOWNLOAD</span>
       </footer>
@@ -120,6 +121,14 @@
   </main>
 
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+  <!-- SHOW: Vollbild-Diashow der laufenden Partien (z.B. auf Laptop/TV am Spielfeldrand) -->
+  <div id="show" class="show" hidden>
+    <div class="show-grid" aria-hidden="true"></div>
+    <div id="show-stage" class="show-stage"></div>
+    <div class="show-bar"><div id="show-progress" class="show-progress"></div></div>
+    <button id="show-close" class="show-close" title="SHOW beenden (Esc)">✕</button>
+  </div>
 
 
   <!-- Geburtstags-Filmplakat: Jonas wird 40 (wird in Startbildschirm und Tab 40! eingesetzt) -->

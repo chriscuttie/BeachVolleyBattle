@@ -58,6 +58,19 @@ Pixel-Szene, 8-Bit-Sounds, Highscore-Tabelle). Darin läuft **derselbe Python-Co
   Umschaltbar: **PLAYER** (Einzelwertung) oder **TEAM** (siehe „Team-Wertung“ unten).
 - **DATEI**: die Turnierdatei, direkt bearbeitbar, mit Download/Upload.
 
+**SHOW-Modus** (Knopf „▶ SHOW“ in der laufenden Runde oder unten auf jeder Seite): Vollbild für
+einen Laptop/Bildschirm am Spielfeldrand. Zeigt jede noch laufende Partie mit Avataren, blendet
+alle 10 Sekunden zur nächsten über und läuft im Kreis; fertige Partien fallen automatisch weg.
+Sind alle Partien fertig, erscheint „ROUND COMPLETE“ mit den Top 5. Beenden mit ✕ oder Esc.
+Der Bildschirm bleibt dabei an (sofern der Browser das unterstützt).
+
+**Avatare**: Bilder in den Ordner `web/avatars/` legen, Dateiname = Spielername wie im System,
+z.B. `Anna.jpg` oder `Anna Lena.png` (Gross-/Kleinschreibung egal; jpg, png, webp, gif).
+Ideal sind quadratische Porträts, mind. ca. 200×200 Pixel, Gesicht eher im oberen Teil.
+Die Bilder werden bewusst leicht verpixelt angezeigt (Arcade-Look). Wer kein Bild hat, bekommt
+automatisch ein Pixel-Gesicht. Die mitgelieferten Bilder (Anna, Ben, Carla, David, Eva, Felix,
+Gina, Hugo) sind **Platzhalter** – einfach löschen oder ersetzen.
+
 Die Turnierdatei liegt im `localStorage` des Browsers, also **nur auf diesem Gerät**.
 Backup über DATEI › DOWNLOAD; mit UPLOAD lässt sie sich auf einem anderen Gerät oder im
 Text-UI auf dem Laptop weiterverwenden (gleiches Format).
@@ -206,7 +219,8 @@ gelöscht (`clear_result`) werden; die Rangliste wird immer aus allen Ergebnisse
 | `beachturnier/textformat.py` | Textformat der Turnierdatei (lesen/schreiben, Fehlermeldungen mit Zeilennummer) |
 | `beachturnier/cli.py` | Text-UI (Start: `python3 turnier.py`) |
 | `web/` | Arcade-Webseite (HTML/CSS/JS + `bridge.py` als Schnittstelle zum Python-Backend) |
-| `tools/build_site.py` | Baut die Webseite nach `_site/` |
+| `web/avatars/` | Avatar-Bilder (Dateiname = Spielername) |
+| `tools/build_site.py` | Baut die Webseite nach `_site/` (inkl. Avatar-Liste) |
 | `beachturnier/storage.py` | Turnierdatei atomar speichern/laden |
 
 Tests: `python3 -m unittest discover -s tests`

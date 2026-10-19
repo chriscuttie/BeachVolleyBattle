@@ -64,6 +64,7 @@ const sfx = {
 // ------------------------------------------------------------------ Python laden
 
 async function boot() {
+  loadAvatars();
   try {
     const py = await loadPyodide({ indexURL: PYODIDE_URL });
     const files = await (await fetch("beachturnier/files.json")).json();
@@ -337,6 +338,7 @@ function courtsView(rnd) {
     `ROUND ${rnd.number}${rnd.manual ? " (ANGEPASST)" : ""} · ${doneCount(rnd)}/${rnd.matches.length} COURTS`));
   box.append(el("p", { class: "hint" },
     "Sieger antippen: 2:0 oder 2:1. ⇄ bei zwei Teams = Teams tauschen. (Zahl) = Teampunkte vor der Runde."));
+  box.append(el("button", { class: "key key-show", onclick: openShow }, "▶ SHOW · VOLLBILD FÜR ZUSCHAUER"));
   rnd.matches.forEach((m) => box.append(matchCard(m, true)));
   if (rnd.bye_team) {
     box.append(el("div", { class: "card bye" },
@@ -523,6 +525,193 @@ function addPlayers(e) {
     sfx.coin();
   }
   input.focus();
+}
+
+// ------------------------------------------------------------------ Avatare
+
+// Bilder liegen in web/avatars/, Dateiname = Spielername (z.B. "Anna Lena.jpg").
+// avatars/index.json listet sie (erzeugt von tools/build_site.py).
+const AVATARS = {}; // normalisierter Name -> URL
+const AVATAR_PX = 72; // Fotos werden auf 72x72 Pixel verkleinert -> Retro-Pixel-Look
+
+const normName = (name) => name.normalize("NFC").trim().toLowerCase().replace(/\s+/g, " ");
+
+async function loadAvatars() {
+  try {
+    const files = await (await fetch("avatars/index.json", { cache: "no-cache" })).json();
+    for (const file of files) {
+      AVATARS[normName(file.replace(/\.[^.]+$/, ""))] = "avatars/" + encodeURIComponent(file);
+    }
+  } catch { /* keine Avatare -> erzeugte Pixel-Gesichter */ }
+}
+
+function hashString(text) {
+  let h = 2166136261;
+  for (const ch of text) h = Math.imul(h ^ ch.codePointAt(0), 16777619);
+  return h >>> 0;
+}
+
+/** Avatar als Canvas: Foto (verpixelt, quadratisch zugeschnitten) oder erzeugtes Pixel-Gesicht. */
+function avatar(name) {
+  const canvas = el("canvas", { class: "avatar", width: AVATAR_PX, height: AVATAR_PX, "aria-label": name });
+  const ctx2 = canvas.getContext("2d");
+  pixelFace(ctx2, name);
+  const url = AVATARS[normName(name)];
+  if (url) {
+    const img = new Image();
+    img.onload = () => {
+      // Porträts: quadratischer Ausschnitt, eher oben (Gesicht), nicht mittig
+      const s = Math.min(img.width, img.height);
+      const sx = (img.width - s) / 2;
+      const sy = Math.max(0, (img.height - s) * 0.2);
+      ctx2.imageSmoothingQuality = "high";
+      ctx2.drawImage(img, sx, sy, s, s, 0, 0, AVATAR_PX, AVATAR_PX);
+    };
+    img.src = url;
+  }
+  return canvas;
+}
+
+/** Erzeugtes Pixel-Gesicht (12x12), Farben aus dem Namen abgeleitet – für Spieler ohne Bild. */
+function pixelFace(c, name) {
+  const h = hashString(name);
+  const pick = (list, shift) => list[(h >>> shift) % list.length];
+  const bg = pick(["#ffe23b", "#2ff3ff", "#ff2fd6", "#4dff7a", "#ff8a1f", "#9d7bff"], 0);
+  const skin = pick(["#f6d0b1", "#e0ac8a", "#c68863", "#8d5a3b", "#f1c27d"], 3);
+  const hair = pick(["#2b1a10", "#6b3e1e", "#d9b25b", "#a33b1f", "#1b1b1b", "#7a7a7a"], 6);
+  const shirt = pick(["#1d1038", "#14324f", "#3b1d6e", "#0f3d2e", "#4a1033"], 9);
+  const long = (h >>> 12) & 1;
+  const map = [
+    "............",
+    "...HHHHHH...",
+    "..HHHHHHHH..",
+    "..HSSSSSSH..",
+    "..SSESSESS..",
+    "..SSSSSSSS..",
+    "..SSSMMSSS..",
+    "...SSSSSS...",
+    long ? "..HSSSSSSH.." : "....SSSS....",
+    ".TTTTTTTTTT.",
+    "TTTTTTTTTTTT",
+    "TTTTTTTTTTTT",
+  ];
+  const colors = { H: hair, S: skin, E: "#1b1020", M: "#a8324a", T: shirt };
+  const cell = AVATAR_PX / 12;
+  c.fillStyle = bg;
+  c.fillRect(0, 0, AVATAR_PX, AVATAR_PX);
+  map.forEach((row, y) => [...row].forEach((ch, x) => {
+    if (colors[ch]) {
+      c.fillStyle = colors[ch];
+      c.fillRect(x * cell, y * cell, cell, cell);
+    }
+  }));
+}
+
+// ------------------------------------------------------------------ SHOW (Vollbild-Diashow)
+
+const SHOW_SECONDS = 10;
+let showTimer = null;
+let showCurrent = null; // Schlüssel der angezeigten Folie
+let wakeLock = null;
+
+function openShow() {
+  const box = $("#show");
+  box.hidden = false;
+  document.body.classList.add("show-on");
+  if (box.requestFullscreen) box.requestFullscreen().catch(() => { /* z.B. iPhone: Overlay reicht */ });
+  try { navigator.wakeLock?.request("screen").then((l) => { wakeLock = l; }).catch(() => {}); } catch { /* egal */ }
+  showCurrent = null;
+  showNext();
+  clearInterval(showTimer);
+  showTimer = setInterval(showNext, SHOW_SECONDS * 1000);
+  sfx.start();
+}
+
+function closeShow() {
+  clearInterval(showTimer);
+  showTimer = null;
+  $("#show").hidden = true;
+  $("#show-stage").replaceChildren();
+  document.body.classList.remove("show-on");
+  if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  wakeLock?.release().catch(() => {});
+  wakeLock = null;
+}
+
+/** Folien: jede laufende Partie (ohne Resultat); sonst Zwischenstand. */
+function showSlides() {
+  if (!S || S.error) return [{ key: "empty", render: () => showMessage("INSERT COIN", "KEINE TURNIERDATEN") }];
+  const rnd = runningRound();
+  const open = rnd ? rnd.matches.filter((m) => !m.result) : [];
+  if (open.length) {
+    return open.map((m, i) => ({ key: m.id, render: () => matchSlide(rnd, m, i + 1, open.length) }));
+  }
+  return [{ key: "scores", render: () => scoresSlide() }];
+}
+
+function showNext() {
+  if (bridge) S = JSON.parse(bridge.state()); // immer den aktuellen Stand anzeigen
+  const slides = showSlides();
+  const pos = slides.findIndex((s) => s.key === showCurrent);
+  const slide = slides[(pos + 1) % slides.length];
+  const stage = $("#show-stage");
+  const old = [...stage.children];
+  const node = el("div", { class: "slide" }, slide.render());
+  stage.append(node);
+  requestAnimationFrame(() => requestAnimationFrame(() => node.classList.add("in")));
+  old.forEach((o) => {
+    o.classList.remove("in");
+    setTimeout(() => o.remove(), 1200);
+  });
+  showCurrent = slide.key;
+  // Fortschrittsbalken neu starten
+  const bar = $("#show-progress");
+  bar.style.animation = "none";
+  void bar.offsetWidth;
+  bar.style.animation = `show-progress ${SHOW_SECONDS}s linear forwards`;
+}
+
+function showTeam(team, strength) {
+  return el("div", { class: "show-team" },
+    el("div", { class: "show-avatars" }, team.map((id) => avatar(pname(id)))),
+    el("div", { class: "show-names" }, team.map((id) => el("span", {}, pname(id).toUpperCase()))),
+    el("div", { class: "show-strength" }, `${strength} PTS`));
+}
+
+function matchSlide(rnd, m, n, total) {
+  return [
+    el("div", { class: "show-head" },
+      el("span", {}, `ROUND ${rnd.number}`),
+      el("span", { class: "show-court" }, `COURT ${m.court}`),
+      el("span", {}, `${n}/${total}`)),
+    el("div", { class: "show-match" },
+      showTeam(m.team_a, m.strength_a),
+      el("div", { class: "show-vs" }, "VS"),
+      showTeam(m.team_b, m.strength_b)),
+    el("div", { class: "show-live" }, "● LIVE"),
+  ];
+}
+
+function scoresSlide() {
+  const last = currentRound();
+  const top = S.standings.slice(0, 5);
+  return [
+    el("div", { class: "show-head" },
+      el("span", {}, last ? `ROUND ${last.number}` : S.name.toUpperCase()),
+      el("span", { class: "show-court" }, last ? "COMPLETE!" : "GET READY"),
+      el("span", {}, "")),
+    el("div", { class: "show-title" }, "HIGH SCORES"),
+    el("div", { class: "show-scores" }, top.map((s) => el("div", { class: "show-score-row" },
+      el("span", { class: "show-rank" }, ORDINAL(s.rank)),
+      avatar(s.name),
+      el("span", { class: "show-score-name" }, s.name.toUpperCase()),
+      el("span", { class: "show-score-pts" }, String(s.points).padStart(3, "0"))))),
+    last ? el("div", { class: "show-live show-quote" }, `COACH JONAS: ${quoteFor(last.number)}`) : null,
+  ];
+}
+
+function showMessage(title, sub) {
+  return [el("div", { class: "show-title" }, title), el("div", { class: "show-live" }, sub)];
 }
 
 // ------------------------------------------------------------------ Highscore
@@ -797,6 +986,10 @@ function animate(time) {
 // ------------------------------------------------------------------ Events
 
 $("#start").addEventListener("click", startGame);
+$("#show-open").addEventListener("click", openShow);
+$("#show-close").addEventListener("click", closeShow);
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("#show").hidden) closeShow(); });
+document.addEventListener("fullscreenchange", () => { if (!document.fullscreenElement && !$("#show").hidden) closeShow(); });
 document.querySelectorAll(".score-modes .key").forEach((b) => b.addEventListener("click", () => {
   scoreMode = b.dataset.mode;
   renderScores();
