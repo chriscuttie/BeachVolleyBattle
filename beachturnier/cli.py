@@ -52,7 +52,8 @@ Befehle (Namen dürfen abgekürzt werden, solange eindeutig: "ann" = Anna)
     res r2c1 2:1                 Korrektur in einer früheren Runde (Runde 2, Court 1)
 
   Sonstiges
-    tabelle                      Rangliste
+    tabelle                      Rangliste (Spieler)
+    tabelle teams                Team-Wertung: nur Partien, die ein Team zusammen gespielt hat
     undo                         Letzten Befehl rückgängig machen
     name Sommer-Turnier          Turniername setzen
     datei                        Wo liegt die Turnierdatei?
@@ -319,6 +320,11 @@ class Shell(cmd.Cmd):
         else:
             done = sum(m.finished for m in rnd.matches)
             title = f"Rangliste – Runde {rnd.number} läuft ({done}/{len(rnd.matches)} Resultate)"
+        if arg.lower() in ("team", "teams"):
+            self._team_table(t, title.replace("Rangliste", "Team-Wertung"))
+            return
+        if arg:
+            raise TournamentError("Format: tabelle  oder  tabelle teams")
         standings = [s for s in t.standings() if s.active or s.matches or s.byes]
         w = max([len(s.name) for s in standings] + [4])
         self.out(f"{t.name} – {title}", "")
@@ -331,6 +337,21 @@ class Shell(cmd.Cmd):
             )
         self.out("", "Sp=Spiele S/N=Siege/Niederlagen FL=Freilos/Pause Buchh=Punkte der Gegner"
                  + ("  *=abwesend" if any(not s.active for s in standings) else ""))
+
+    def _team_table(self, t: Tournament, title: str) -> None:
+        teams = t.team_standings()
+        self.out(f"{t.name} – {title}", "")
+        if not teams:
+            self.out("Noch keine Team-Resultate.")
+            return
+        w = max(len(ts.name) for ts in teams)
+        self.out(f" Rg  {'Team':<{w}}  Pkt  Sp   S  N  Sätze  Bälle")
+        for ts in teams:
+            self.out(
+                f"{ts.rank:>3}. {ts.name:<{w}}  {ts.points:>3}  {ts.matches:>2}  {ts.wins:>2} {ts.losses:>2}"
+                f"  {ts.set_diff:>+5}  {ts.ball_diff:>+5}"
+            )
+        self.out("", "Nur Partien, die genau diese zwei Spieler zusammen gespielt haben (ohne Freilos/Pause).")
 
     @_command(mutating=False)
     def do_status(self, t: Tournament, arg: str) -> None:

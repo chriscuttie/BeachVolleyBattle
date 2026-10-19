@@ -77,6 +77,52 @@ class Standing:
 
 
 @dataclass
+class TeamStanding:
+    """Wertung einer Team-Kombination: nur Partien, die genau diese zwei Spieler
+    zusammen gespielt haben (ohne Freilos-/Pausenpunkte)."""
+
+    rank: int
+    player_ids: TeamIds
+    name: str
+    points: int = 0
+    matches: int = 0
+    wins: int = 0
+    losses: int = 0
+    sets_won: int = 0
+    sets_lost: int = 0
+    balls_won: int = 0
+    balls_lost: int = 0
+
+    @property
+    def set_diff(self) -> int:
+        return self.sets_won - self.sets_lost
+
+    @property
+    def ball_diff(self) -> int:
+        return self.balls_won - self.balls_lost
+
+    def sort_key(self) -> tuple:
+        return (-self.points, -self.set_diff, -self.ball_diff, self.matches, self.name.lower())
+
+    def to_dict(self) -> dict:
+        return {
+            "rank": self.rank,
+            "player_ids": list(self.player_ids),
+            "name": self.name,
+            "points": self.points,
+            "matches": self.matches,
+            "wins": self.wins,
+            "losses": self.losses,
+            "sets_won": self.sets_won,
+            "sets_lost": self.sets_lost,
+            "set_diff": self.set_diff,
+            "balls_won": self.balls_won,
+            "balls_lost": self.balls_lost,
+            "ball_diff": self.ball_diff,
+        }
+
+
+@dataclass
 class _History:
     """Wer hat mit/gegen wen gespielt (über alle abgeschlossenen Partien)."""
 
@@ -355,6 +401,41 @@ class Tournament:
             # Gleicher Rang bei komplett identischen Wertungen
             same = i > 0 and s.sort_key()[:-1] == ordered[i - 1].sort_key()[:-1]
             s.rank = ordered[i - 1].rank if same else i + 1
+        return ordered
+
+    def team_standings(self) -> list[TeamStanding]:
+        """Rangliste der Team-Kombinationen, die mindestens eine Partie mit
+        Resultat zusammen gespielt haben (Reihenfolge der Spieler egal)."""
+        teams: dict[frozenset, TeamStanding] = {}
+        for rnd in self.rounds:
+            for m in rnd.matches:
+                if not m.result:
+                    continue
+                r = m.result
+                pts_a, pts_b = match_points(r)
+                for team, pts, s_won, s_lost, b_won, b_lost in (
+                    (m.team_a, pts_a, r.sets_a, r.sets_b, r.balls_a, r.balls_b),
+                    (m.team_b, pts_b, r.sets_b, r.sets_a, r.balls_b, r.balls_a),
+                ):
+                    key = frozenset(team)
+                    if key not in teams:
+                        ids = tuple(sorted(team, key=lambda pid: self.players[pid].name.lower()))
+                        name = " / ".join(self.players[pid].name for pid in ids)
+                        teams[key] = TeamStanding(rank=0, player_ids=ids, name=name)
+                    ts = teams[key]
+                    ts.points += pts
+                    ts.matches += 1
+                    ts.wins += s_won > s_lost
+                    ts.losses += s_won < s_lost
+                    ts.sets_won += s_won
+                    ts.sets_lost += s_lost
+                    ts.balls_won += b_won
+                    ts.balls_lost += b_lost
+
+        ordered = sorted(teams.values(), key=TeamStanding.sort_key)
+        for i, ts in enumerate(ordered):
+            same = i > 0 and ts.sort_key()[:-1] == ordered[i - 1].sort_key()[:-1]
+            ts.rank = ordered[i - 1].rank if same else i + 1
         return ordered
 
     def suggest_teams(

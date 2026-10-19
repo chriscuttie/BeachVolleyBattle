@@ -82,6 +82,7 @@ def state():
         ],
         "rounds": rounds,
         "standings": [s.to_dict() for s in standings if s.active or s.matches or s.byes],
+        "team_standings": [ts.to_dict() for ts in t.team_standings()],
         "can_undo": bool(_undo),
     })
 

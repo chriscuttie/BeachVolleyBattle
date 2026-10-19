@@ -55,6 +55,7 @@ Pixel-Szene, 8-Bit-Sounds, Highscore-Tabelle). Darin läuft **derselbe Python-Co
   Satzresultate eingeben; Teams mit ⇄ tauschen; frühere Runden unten korrigieren.
 - **SPIELER**: hinzufügen (mehrere mit Komma), DA/WEG (abwesend), umbenennen, entfernen.
 - **HI-SCORE**: die Rangliste im Arcade-Look – ideal für den Screenshot in den Chat.
+  Umschaltbar: **PLAYER** (Einzelwertung) oder **TEAM** (siehe „Team-Wertung“ unten).
 - **DATEI**: die Turnierdatei, direkt bearbeitbar, mit Download/Upload.
 
 Die Turnierdatei liegt im `localStorage` des Browsers, also **nur auf diesem Gerät**.
@@ -145,6 +146,11 @@ speichert danach. So gehen Handkorrekturen nicht verloren, auch wenn das Program
 (nur nicht gleichzeitig im Editor und im Programm ändern).
 
 ## Regeln im Detail
+
+**Team-Wertung** (HI-SCORE › TEAM, im Text-UI `tabelle teams`): nur Team-Kombinationen, die
+wirklich zusammen gespielt haben, und nur die Partien, die sie zusammen gespielt haben
+(ohne Freilos-/Pausenpunkte). Reihenfolge: Punkte → Satzdifferenz → Ballpunktdifferenz →
+weniger Spiele. Teams, die öfter zusammen gespielt haben, sammeln entsprechend mehr Punkte.
 
 **Rangliste** (in dieser Reihenfolge): Punkte → Buchholz (Summe der aktuellen Punkte
 aller bisherigen Gegner) → Satzdifferenz → Ballpunktdifferenz.

@@ -8,7 +8,7 @@ from .models import Match, Player, Result, Round
 from .scoring import ScoringError, parse_result
 from .storage import load, save
 from .textformat import TextFormatError, dumps, loads
-from .tournament import Standing, Tournament, TournamentError
+from .tournament import Standing, TeamStanding, Tournament, TournamentError
 
 __all__ = [
     "Match",
@@ -17,6 +17,7 @@ __all__ = [
     "Round",
     "ScoringError",
     "Standing",
+    "TeamStanding",
     "TextFormatError",
     "Tournament",
     "TournamentError",

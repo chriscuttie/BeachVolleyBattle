@@ -531,8 +531,11 @@ const ORDINAL = (n) => n + (n % 10 === 1 && n % 100 !== 11 ? "ST" : n % 10 === 2
   : n % 10 === 3 && n % 100 !== 13 ? "RD" : "TH");
 const RANK_COLORS = ["var(--yellow)", "var(--orange)", "var(--magenta)", "var(--cyan)", "var(--green)"];
 
+let scoreMode = "player"; // "player" oder "team"
+
 function renderScores() {
   const i = S;
+  document.querySelectorAll(".score-modes .key").forEach((b) => b.classList.toggle("key-on", b.dataset.mode === scoreMode));
   const box = $("#scores");
   box.replaceChildren();
   if (i.error) {
@@ -540,11 +543,14 @@ function renderScores() {
     return;
   }
   const cur = currentRound();
-  $("#scores-sub").textContent = cur
+  $("#scores-sub").textContent = (cur
     ? `${i.name.toUpperCase()} · ROUND ${cur.number} · ${doneCount(cur)}/${cur.matches.length} COURTS`
-    : i.name.toUpperCase();
-  if (!i.standings.length) {
-    box.innerHTML = '<p class="empty">NO PLAYERS YET – INSERT PLAYERS</p>';
+    : i.name.toUpperCase()) + (scoreMode === "team" ? " · NUR ZUSAMMEN GESPIELTE PARTIEN" : "");
+  const list = scoreMode === "team" ? i.team_standings : i.standings;
+  if (!list.length) {
+    box.innerHTML = scoreMode === "team"
+      ? '<p class="empty">NO TEAMS YET – ERST NACH DEM ERSTEN RESULTAT</p>'
+      : '<p class="empty">NO PLAYERS YET – INSERT PLAYERS</p>';
     return;
   }
   const row = (cells, cls, color) => {
@@ -559,8 +565,19 @@ function renderScores() {
     });
     box.appendChild(div);
   };
+  const signed = (n) => (n > 0 ? `+${n}` : String(n));
+  if (scoreMode === "team") {
+    row(["RANK", "TEAM", "PTS", "W-L", "SETS"], "header");
+    list.forEach((s) => row(
+      [ORDINAL(s.rank), s.name.toUpperCase(), String(s.points).padStart(3, "0"),
+       `${s.wins}-${s.losses}`, signed(s.set_diff)],
+      "",
+      RANK_COLORS[(s.rank - 1) % RANK_COLORS.length],
+    ));
+    return;
+  }
   row(["RANK", "NAME", "PTS", "W-L", "BH"], "header");
-  i.standings.forEach((s) => {
+  list.forEach((s) => {
     row(
       [ORDINAL(s.rank), s.name.toUpperCase(), String(s.points).padStart(3, "0"),
        `${s.wins}-${s.losses}`, String(s.buchholz)],
@@ -780,6 +797,11 @@ function animate(time) {
 // ------------------------------------------------------------------ Events
 
 $("#start").addEventListener("click", startGame);
+document.querySelectorAll(".score-modes .key").forEach((b) => b.addEventListener("click", () => {
+  scoreMode = b.dataset.mode;
+  renderScores();
+  sfx.blip();
+}));
 document.querySelectorAll(".tab").forEach((b) => b.addEventListener("click", () => showTab(b.dataset.tab)));
 $("#add-player").addEventListener("submit", addPlayers);
 $("#rename-tournament").addEventListener("submit", (e) => {

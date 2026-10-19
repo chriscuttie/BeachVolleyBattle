@@ -48,6 +48,14 @@ class CliTest(unittest.TestCase):
         self.assertNotIn("Anna Lena", out)  # abwesend und nie gespielt
         self.assertEqual(sum(s.points for s in self.t().standings()), 2 * (2 + 1) + 2 * (0 + 3))
 
+    def test_team_table(self):
+        self.start()
+        self.run_cmd("res 1 2:0")
+        out = self.run_cmd("tabelle teams")
+        self.assertIn("Team-Wertung", out)
+        self.assertEqual(out.count(" / "), 2)  # nur Court 1 hat ein Resultat
+        self.assertIn("Fehler", self.run_cmd("tabelle quatsch"))
+
     def test_abbreviations_and_ambiguity(self):
         self.run_cmd("spieler " + NAMES)
         self.assertIn("nicht eindeutig", self.run_cmd("abwesend ann"))
