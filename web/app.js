@@ -567,19 +567,19 @@ function renderScores() {
   };
   const signed = (n) => (n > 0 ? `+${n}` : String(n));
   if (scoreMode === "team") {
-    row(["RANK", "TEAM", "PTS", "W-L", "SETS"], "header");
+    row(["#", "TEAM", "PTS", "SP", "W-L", "SETS"], "header");
     list.forEach((s) => row(
-      [ORDINAL(s.rank), s.name.toUpperCase(), String(s.points).padStart(3, "0"),
+      [ORDINAL(s.rank), s.name.toUpperCase(), String(s.points).padStart(3, "0"), String(s.matches),
        `${s.wins}-${s.losses}`, signed(s.set_diff)],
       "",
       RANK_COLORS[(s.rank - 1) % RANK_COLORS.length],
     ));
     return;
   }
-  row(["RANK", "NAME", "PTS", "W-L", "BH"], "header");
+  row(["#", "NAME", "PTS", "SP", "W-L", "BH"], "header");
   list.forEach((s) => {
     row(
-      [ORDINAL(s.rank), s.name.toUpperCase(), String(s.points).padStart(3, "0"),
+      [ORDINAL(s.rank), s.name.toUpperCase(), String(s.points).padStart(3, "0"), String(s.matches),
        `${s.wins}-${s.losses}`, String(s.buchholz)],
       "",
       RANK_COLORS[(s.rank - 1) % RANK_COLORS.length],

@@ -178,10 +178,11 @@ body {
 #scores-sub { text-align: center; }
 .score-modes { justify-content: center; margin: 4px 0 8px; }
 .score-modes .key { min-width: 7em; }
+.scores-legend { text-align: center; margin-top: 12px; }
 .scores { font-family: var(--pixel); font-size: clamp(9px, 2.2vw, 13px); }
 .row {
   display: grid;
-  grid-template-columns: 4.5em 1fr 4em 5em 4em;
+  grid-template-columns: 4.5em 1fr 4em 3em 5em 4em;
   gap: 6px;
   padding: 6px 0;
   align-items: center;
@@ -231,7 +232,7 @@ body {
 @media (max-width: 560px) {
   body { font-size: 19px; }
   .tab { font-size: 8px; padding: 10px 2px; }
-  .row { grid-template-columns: 3.6em 1fr 3.2em 4em 3.2em; }
+  .row { grid-template-columns: 3.4em 1fr 3em 2.2em 3.6em 3em; gap: 4px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
