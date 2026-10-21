@@ -38,12 +38,29 @@ function tone(freq, dur, when = 0, type = "square", vol = 0.05) {
   osc.stop(t + dur);
 }
 
+/** Rauschen (Schlag/Explosion) wie beim NES-Rauschkanal. */
+function noise(dur, when = 0, vol = 0.09) {
+  if (!soundOn || !audio) return;
+  const t = audio.currentTime + when;
+  const buffer = audio.createBuffer(1, Math.ceil(audio.sampleRate * dur), audio.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / data.length);
+  const src = audio.createBufferSource();
+  const gain = audio.createGain();
+  src.buffer = buffer;
+  gain.gain.setValueAtTime(vol, t);
+  src.connect(gain).connect(audio.destination);
+  src.start(t);
+}
+
 const sfx = {
   blip: () => tone(880, 0.05),
   error: () => { tone(160, 0.18, 0, "sawtooth"); tone(110, 0.25, 0.15, "sawtooth"); },
   coin: () => { tone(988, 0.08); tone(1319, 0.35, 0.08); },
   start: () => [523, 659, 784, 1047].forEach((f, i) => tone(f, 0.12, i * 0.09)),
   fanfare: () => [784, 784, 784, 1047, 988, 1047].forEach((f, i) => tone(f, 0.14, i * 0.12)),
+  fight: () => { [196, 262, 392, 523].forEach((f, i) => tone(f, 0.09, i * 0.07, "square", 0.06)); noise(0.25, 0.32); },
+  punch: () => { noise(0.14, 0, 0.12); tone(110, 0.16, 0, "triangle", 0.12); tone(70, 0.22, 0.04, "square", 0.05); },
   birthday: () => {
     // [Frequenz, Dauer in Achteln] – "Happy Birthday" in 8 Bit
     const song = [
@@ -158,8 +175,27 @@ function renderHud() {
   }
   const r = currentRound();
   $("#hud-round").textContent = `ROUND ${r ? r.number : 0}`;
-  $("#hud-courts").textContent = `COURTS ${r ? doneCount(r) : 0}/${r ? r.matches.length : 0}`;
+  $("#hud-courts").textContent = `${r ? doneCount(r) : 0}/${r ? r.matches.length : 0}`;
+  $("#hud-bar").style.width = r && r.matches.length ? `${(100 * doneCount(r)) / r.matches.length}%` : "0%";
   $("#hud-players").textContent = `PLAYERS ${S.error ? 0 : activePlayers().length}`;
+}
+
+// ------------------------------------------------------------------ Ansagen (ROUND 1 … FIGHT!)
+
+let announceQueue = Promise.resolve();
+function announce(...words) {
+  announceQueue = announceQueue.then(async () => {
+    const box = $("#announce");
+    for (const word of words) {
+      box.textContent = word;
+      box.hidden = false;
+      box.classList.remove("go");
+      void box.offsetWidth;
+      box.classList.add("go");
+      await new Promise((r) => setTimeout(r, 900));
+    }
+    box.hidden = true;
+  });
 }
 
 // ------------------------------------------------------------------ 40! Jonas
@@ -261,7 +297,7 @@ function setupView() {
       const n = draft.resting.length;
       if (n > 1 && !confirm(`${n} Spieler ohne Team pausieren diese Runde (+${S.bye_points} Punkte). Trotzdem starten?`)) return;
       const res = act("start_round", { teams: draft.teams });
-      if (res.ok) { draft = null; sfx.start(); }
+      if (res.ok) { draft = null; sfx.fight(); announce(`ROUND ${next}`, "FIGHT!"); }
     },
   }, draft.teams.length < 2 ? "MINDESTENS 2 TEAMS BILDEN" : `▶ ROUND ${next} STARTEN`));
   return box;
@@ -327,7 +363,7 @@ function chip(id, list, i, k) {
       sfx.blip();
       renderRound();
     },
-  }, pname(id));
+  }, avatar(pname(id), "avatar-xs"), pname(id));
 }
 
 // ---- Laufende Runde: Courts und Resultate
@@ -371,6 +407,7 @@ function matchCard(m, current) {
     const lost = r && !won;
     return el("div", { class: "side" + (won ? " won" : "") + (lost ? " lost" : "") },
       el("div", { class: "team-line" },
+        team.map((id) => avatar(pname(id), "avatar-xs")),
         el("span", { class: "team-name" }, teamName(team)),
         current ? el("span", { class: "strength" }, `(${strength})`) : null,
         current ? swapButton(m.id, letter) : null),
@@ -411,11 +448,15 @@ function record(m, result) {
   if (!res.ok) return;
   openSets = null;
   const r = currentRound();
+  const m2 = r.matches.find((x) => x.id === m.id) || S.rounds.flatMap((x) => x.matches).find((x) => x.id === m.id);
+  const perfect = m2 && m2.result && Math.min(m2.result.sets_a, m2.result.sets_b) === 0;
+  sfx.punch();
   if (wasRunning && r.number === wasRunning.number && r.finished) {
-    sfx.fanfare();
+    announce(perfect ? "PERFECT!" : "K.O.!", `ROUND ${r.number} CLEAR!`);
+    setTimeout(() => sfx.fanfare(), 900);
     toast(`ROUND ${r.number} COMPLETE! ${quoteFor(r.number)}`, "jonas");
   } else {
-    sfx.coin();
+    announce(perfect ? "PERFECT!" : "K.O.!");
   }
 }
 
@@ -482,6 +523,7 @@ function renderPlayers() {
   for (const p of players) {
     list.append(el("div", { class: "player" + (p.active ? "" : " absent") },
       el("span", { class: "rank" }, `${p.rank}.`),
+      avatar(p.name, "avatar-sm"),
       el("span", { class: "pname" }, p.name),
       el("span", { class: "pts" }, `${p.points} P`),
       el("button", {
@@ -552,8 +594,8 @@ function hashString(text) {
 }
 
 /** Avatar als Canvas: Foto (verpixelt, quadratisch zugeschnitten) oder erzeugtes Pixel-Gesicht. */
-function avatar(name) {
-  const canvas = el("canvas", { class: "avatar", width: AVATAR_PX, height: AVATAR_PX, "aria-label": name });
+function avatar(name, size = "") {
+  const canvas = el("canvas", { class: `avatar ${size}`, width: AVATAR_PX, height: AVATAR_PX, "aria-label": name });
   const ctx2 = canvas.getContext("2d");
   pixelFace(ctx2, name);
   const url = AVATARS[normName(name)];
@@ -576,10 +618,10 @@ function avatar(name) {
 function pixelFace(c, name) {
   const h = hashString(name);
   const pick = (list, shift) => list[(h >>> shift) % list.length];
-  const bg = pick(["#ffe23b", "#2ff3ff", "#ff2fd6", "#4dff7a", "#ff8a1f", "#9d7bff"], 0);
-  const skin = pick(["#f6d0b1", "#e0ac8a", "#c68863", "#8d5a3b", "#f1c27d"], 3);
-  const hair = pick(["#2b1a10", "#6b3e1e", "#d9b25b", "#a33b1f", "#1b1b1b", "#7a7a7a"], 6);
-  const shirt = pick(["#1d1038", "#14324f", "#3b1d6e", "#0f3d2e", "#4a1033"], 9);
+  const bg = pick(["#3cbcfc", "#f8b800", "#58d854", "#f878f8", "#fc7460", "#6888fc"], 0);
+  const skin = pick(["#fce0a8", "#fcb8a0", "#e4a46c", "#ac7c00", "#fca044"], 3);
+  const hair = pick(["#000000", "#503000", "#ac7c00", "#a81000", "#7c7c7c", "#f8b800"], 6);
+  const shirt = pick(["#0058f8", "#d82800", "#00a800", "#6844fc", "#000000"], 9);
   const long = (h >>> 12) & 1;
   const map = [
     "............",
@@ -595,7 +637,7 @@ function pixelFace(c, name) {
     "TTTTTTTTTTTT",
     "TTTTTTTTTTTT",
   ];
-  const colors = { H: hair, S: skin, E: "#1b1020", M: "#a8324a", T: shirt };
+  const colors = { H: hair, S: skin, E: "#000000", M: "#a81000", T: shirt };
   const cell = AVATAR_PX / 12;
   c.fillStyle = bg;
   c.fillRect(0, 0, AVATAR_PX, AVATAR_PX);
@@ -613,6 +655,14 @@ const SHOW_SECONDS = 10;
 let showTimer = null;
 let showCurrent = null; // Schlüssel der angezeigten Folie
 let wakeLock = null;
+let showSlideStart = 0;
+let showTick = null;
+
+/** Countdown oben in der Mitte: Sekunden bis zur nächsten Partie. */
+function updateShowTimers() {
+  const left = Math.max(0, Math.ceil(SHOW_SECONDS - (Date.now() - showSlideStart) / 1000));
+  document.querySelectorAll("#show [data-timer]").forEach((t) => { t.textContent = String(left).padStart(2, "0"); });
+}
 
 function openShow() {
   const box = $("#show");
@@ -624,11 +674,14 @@ function openShow() {
   showNext();
   clearInterval(showTimer);
   showTimer = setInterval(showNext, SHOW_SECONDS * 1000);
+  clearInterval(showTick);
+  showTick = setInterval(updateShowTimers, 250);
   sfx.start();
 }
 
 function closeShow() {
   clearInterval(showTimer);
+  clearInterval(showTick);
   showTimer = null;
   $("#show").hidden = true;
   $("#show-stage").replaceChildren();
@@ -644,9 +697,9 @@ function showSlides() {
   const rnd = runningRound();
   const open = rnd ? rnd.matches.filter((m) => !m.result) : [];
   if (open.length) {
-    return open.map((m, i) => ({ key: m.id, render: () => matchSlide(rnd, m, i + 1, open.length) }));
+    return open.map((m, i) => ({ key: m.id, cls: "slide-vs", render: () => matchSlide(rnd, m, i + 1, open.length) }));
   }
-  return [{ key: "scores", render: () => scoresSlide() }];
+  return [{ key: "scores", cls: "slide-scores", render: () => scoresSlide() }];
 }
 
 function showNext() {
@@ -656,7 +709,8 @@ function showNext() {
   const slide = slides[(pos + 1) % slides.length];
   const stage = $("#show-stage");
   const old = [...stage.children];
-  const node = el("div", { class: "slide" }, slide.render());
+  const node = el("div", { class: `slide ${slide.cls || ""}` }, slide.render());
+  showSlideStart = Date.now();
   stage.append(node);
   requestAnimationFrame(() => requestAnimationFrame(() => node.classList.add("in")));
   old.forEach((o) => {
@@ -678,17 +732,24 @@ function showTeam(team, strength) {
     el("div", { class: "show-strength" }, `${strength} PTS`));
 }
 
+function fightSide(team, side) {
+  return el("div", { class: `fh-side ${side}` },
+    el("div", { class: "fh-name" }, team.map(pname).join(" & ").toUpperCase()),
+    el("div", { class: "bar" }, el("div", { class: "bar-fill full" })));
+}
+
 function matchSlide(rnd, m, n, total) {
   return [
-    el("div", { class: "show-head" },
-      el("span", {}, `ROUND ${rnd.number}`),
-      el("span", { class: "show-court" }, `COURT ${m.court}`),
-      el("span", {}, `${n}/${total}`)),
+    el("div", { class: "fight-hud" },
+      fightSide(m.team_a, "left"),
+      el("div", { class: "fh-timer", "data-timer": "" }, String(SHOW_SECONDS)),
+      fightSide(m.team_b, "right")),
     el("div", { class: "show-match" },
       showTeam(m.team_a, m.strength_a),
       el("div", { class: "show-vs" }, "VS"),
       showTeam(m.team_b, m.strength_b)),
-    el("div", { class: "show-live" }, "● LIVE"),
+    el("div", { class: "show-foot" }, `ROUND ${rnd.number} · COURT ${m.court} · ${n}/${total}`),
+    el("div", { class: "show-live" }, "FIGHT!"),
   ];
 }
 
@@ -845,28 +906,53 @@ function showTab(name) {
   sfx.blip();
 }
 
-// ------------------------------------------------------------------ Pixel-Szene
+// ------------------------------------------------------------------ Pixel-Szene (Kampf-Arena am Strand)
 
 const scene = $("#scene");
 const ctx = scene.getContext("2d");
-const W = scene.width;
-const H = scene.height;
-const HORIZON = 24;
+const W = scene.width; // 128
+const H = scene.height; // 64
+const C = {
+  black: "#000000", white: "#fcfcfc", sky1: "#0058f8", sky2: "#3cbcfc", sky3: "#a4e4fc", sun: "#fce0a8",
+  sea1: "#0000bc", sea2: "#0058f8", sand1: "#fce0a8", sand2: "#e4a46c", trunk: "#ac7c00", leaf: "#00a800",
+  leaf2: "#58d854", fence: "#7c7c7c", skin: "#fca044", red: "#d82800", blue: "#0058f8", yellow: "#f8b800",
+};
+const HORIZON = 26;
 const PALM = [
-  "..##.....##..",
-  ".#..##.##..#.",
-  "#.....#.....#",
-  "......#......",
-  ".....#.......",
-  ".....#.......",
-  "....#........",
-  "....#........",
-  "....#........",
-  "...#.........",
-  "...#.........",
-  "..###........",
+  "...LLL..LLL....",
+  "..LLLLLLLLLLL..",
+  ".LL..LLTLL..LL.",
+  "L.....LTL.....L",
+  "......LT.......",
+  ".......T.......",
+  ".......T.......",
+  "......T........",
+  "......T........",
+  "......T........",
+  ".....T.........",
+  ".....T.........",
+  ".....T.........",
+  "....TT.........",
 ];
-const PLAYER = [".#.", "###", ".#.", "#.#"];
+// Kämpfer in Kampfhaltung (schaut nach rechts). H Haar, B Stirnband, S Haut, E Auge, O Anzug, K Gürtel
+const FIGHTER = [
+  "....HHHH....",
+  "...HHHHHHB..",
+  "...BBBBBBBB.",
+  "...SSSSSS...",
+  "...SSSSES...",
+  "....SSSS....",
+  "..OOOOOOOSS.",
+  ".SOOOOOOOSS.",
+  ".SSOOOOOO...",
+  "...OOOOOO...",
+  "...KKKKKK...",
+  "...OOO.OO...",
+  "..OOO...OO..",
+  "..OO.....OO.",
+  ".OO.......OO",
+  ".SS.......SS",
+];
 const PLANE = [
   "#.......",
   "##..##..",
@@ -893,89 +979,91 @@ function px(x, y, color, w = 1, h = 1) {
   ctx.fillRect(Math.round(x), Math.round(y), w, h);
 }
 
-function sprite(rows, x, y, color, flip = false) {
+function sprite(rows, x, y, colors, flip = false) {
+  const palette = typeof colors === "string" ? { "#": colors } : colors;
   rows.forEach((row, dy) => {
-    [...row].forEach((c, dx) => {
-      if (c === "#") px(flip ? x + row.length - 1 - dx : x + dx, y + dy, color);
+    [...row].forEach((ch, dx) => {
+      const color = palette[ch];
+      if (color) px(flip ? x + row.length - 1 - dx : x + dx, y + dy, color);
     });
   });
 }
 
 function drawScene(time) {
-  // Himmel
-  const sky = ctx.createLinearGradient(0, 0, 0, HORIZON);
-  sky.addColorStop(0, "#14062b");
-  sky.addColorStop(1, "#7a1a6e");
-  ctx.fillStyle = sky;
-  ctx.fillRect(0, 0, W, HORIZON);
-  // Sterne
-  for (let k = 0; k < 14; k++) {
-    if ((k * 7 + Math.floor(time / 600)) % 5) px((k * 37) % W, (k * 13) % 12, "#c9b8ff");
+  // Himmel in Bändern mit NES-typischem Schachbrett-Übergang
+  const bands = [[0, 9, C.sky1], [9, 18, C.sky2], [18, HORIZON, C.sky3]];
+  for (const [y0, y1, color] of bands) px(0, y0, color, W, y1 - y0);
+  for (const [y, upper] of [[9, C.sky1], [18, C.sky2]]) {
+    for (let x = 0; x < W; x += 2) px(x + (y % 2), y, upper);
   }
-  // Sonne mit Streifen
+  // Sonne und Wolken
+  for (let dy = -6; dy <= 6; dy++) {
+    const half = Math.floor(Math.sqrt(36 - dy * dy));
+    px(100 - half, 12 + dy, C.sun, half * 2 + 1, 1);
+  }
+  const cloud = (cx, cy) => { px(cx, cy, C.white, 10, 2); px(cx + 2, cy - 2, C.white, 5, 2); px(cx + 7, cy - 1, C.white, 4, 1); };
+  const drift = (time / 400) % (W + 20);
+  cloud(((20 + drift) % (W + 20)) - 20, 6);
+  cloud(((70 + drift * 0.6) % (W + 20)) - 20, 15);
+  // Meer mit Wellen
+  px(0, HORIZON, C.sea1, W, 6);
+  px(0, HORIZON + 2, C.sea2, W, 2);
+  for (let k = 0; k < 9; k++) {
+    const x = (k * 15 + time / 90) % W;
+    px(x, HORIZON + 1 + (k % 3) * 2, C.white, 3, 1);
+  }
+  // Publikum hinter der Bande: Köpfe hüpfen
+  const crowdY = HORIZON + 6;
+  px(0, crowdY, "#503000", W, 6);
+  const shirts = [C.red, C.blue, C.yellow, "#00a800", "#f878f8", C.white];
+  for (let x = 1; x < W; x += 4) {
+    const k = x / 4;
+    const jump = Math.sin(time / 180 + k * 1.7) > 0.6 ? -1 : 0;
+    px(x, crowdY + 2 + jump, shirts[k % shirts.length], 3, 4);
+    px(x + 0.5, crowdY + jump, k % 3 ? C.skin : C.sand1, 2, 2);
+  }
+  px(0, crowdY + 6, C.fence, W, 2);
+  px(0, crowdY + 6, C.white, W, 1);
+  // Sand
+  const sandY = crowdY + 8;
+  px(0, sandY, C.sand1, W, H - sandY);
+  for (let y = sandY + 1; y < H; y += 3) {
+    for (let x = (y * 7) % 6; x < W; x += 6) px(x, y, C.sand2);
+  }
+  // Palmen
+  const palm = { L: C.leaf, T: C.trunk };
+  sprite(PALM, 1, HORIZON - 7, palm);
+  sprite(PALM, W - 16, HORIZON - 7, palm, true);
+  // Netz
   const cx = W / 2;
-  const cy = HORIZON - 2;
-  for (let y = cy - 12; y < HORIZON; y++) {
-    const half = Math.floor(Math.sqrt(Math.max(0, 144 - (y - cy) ** 2)));
-    if (y > cy - 5 && (y - cy) % 3 === 0) continue;
-    const t = (y - (cy - 12)) / 14;
-    const color = t < 0.4 ? "#ffe23b" : t < 0.7 ? "#ff8a1f" : "#ff2fd6";
-    px(cx - half, y, color, half * 2, 1);
-  }
-  // Meer
-  for (let y = HORIZON; y < HORIZON + 4; y++) {
-    px(0, y, y % 2 ? "#1b3a8a" : "#2453b8", W, 1);
-  }
-  for (let k = 0; k < 6; k++) {
-    const x = (k * 17 + time / 120) % W;
-    px(x, HORIZON + 1 + (k % 3), "#ff8ad8", 3, 1);
-  }
-  // Sand mit Synthwave-Gitter
-  px(0, HORIZON + 4, "#3a1450", W, H - HORIZON - 4);
-  ctx.fillStyle = "#ff2fd6";
-  for (let k = -8; k <= 8; k++) {
-    for (let y = HORIZON + 4; y < H; y++) {
-      const x = cx + k * 3 * ((y - HORIZON) / 4);
-      if (x >= 0 && x < W) ctx.fillRect(Math.round(x), y, 1, 1);
-    }
-  }
-  const scroll = (time / 300) % 1;
-  for (let k = 0; k < 6; k++) {
-    const y = HORIZON + 4 + (k + scroll) ** 1.6;
-    if (y < H) px(0, y, "#ff2fd6", W, 1);
-  }
+  px(cx - 1, crowdY + 1, C.white, 1, H - crowdY - 6);
+  px(cx, crowdY + 1, C.black, 1, H - crowdY - 6);
+  for (let y = crowdY + 2; y < crowdY + 9; y += 2) px(cx - 1, y, C.fence, 2, 1);
+  px(cx - 1, crowdY + 1, C.white, 2, 1);
+  // Kämpfer in Kampfhaltung (wippen im Takt)
+  const baseY = H - 18;
+  const bob = (phase) => (Math.floor(time / 260 + phase) % 2 ? 1 : 0);
+  sprite(FIGHTER, cx - 34, baseY + bob(0), { H: C.black, B: C.red, S: C.skin, E: C.black, O: C.blue, K: C.black });
+  sprite(FIGHTER, cx + 22, baseY + bob(1), { H: "#a81000", B: C.yellow, S: C.skin, E: C.black, O: C.red, K: C.black }, true);
+  // Ball: Bogen über das Netz und zurück
+  const t = (time / 1500) % 2;
+  const p = t < 1 ? t : 2 - t;
+  const bx = cx - 22 + p * 44;
+  const by = baseY + 2 - Math.sin(p * Math.PI) * 26;
+  px(bx - 1, by - 1, C.black, 4, 4);
+  px(bx, by, C.white, 2, 2);
+  px(bx, H - 3, "rgba(0,0,0,.35)", 3, 1);
   // Flugzeug mit Geburtstagsbanner
   const bannerW = BANNER.length * 4 + 3;
   const span = W + bannerW + 20;
-  const bx0 = W - ((time / 60) % (span + 40));
+  const bx0 = W - ((time / 45) % (span + 60));
   if (bx0 > -bannerW - 14) {
-    sprite(PLANE, bx0 - 1, 4, "#c9c9c9", true);
-    px(bx0 + 7, 6, "#e9e3ff", 4, 1);
-    px(bx0 + 11, 2, "#ffe23b", bannerW, 9);
-    [...BANNER].forEach((ch, k) => sprite(FONT[ch] || FONT[" "], bx0 + 13 + k * 4, 4, "#ff2fd6"));
+    sprite(PLANE, bx0 - 1, 3, C.white, true);
+    px(bx0 + 7, 5, C.black, 4, 1);
+    px(bx0 + 11, 1, C.black, bannerW + 2, 11);
+    px(bx0 + 12, 2, C.yellow, bannerW, 9);
+    [...BANNER].forEach((ch, k) => sprite(FONT[ch] || FONT[" "], bx0 + 14 + k * 4, 4, C.red));
   }
-  // Palmen
-  sprite(PALM, 3, HORIZON - 4, "#0a0414");
-  sprite(PALM, W - 16, HORIZON - 4, "#0a0414", true);
-  // Netz
-  px(cx, HORIZON - 3, "#e9e3ff", 1, 12);
-  for (let x = cx - 0; x <= cx; x++) {
-    for (let y = HORIZON - 3; y < HORIZON + 2; y += 2) px(x, y, "#ffffff");
-  }
-  // Spieler
-  const baseY = HORIZON + 6;
-  const hop = (phase) => (Math.sin(phase) > 0.85 ? -1 : 0);
-  const t = (time / 1600) % 2;
-  sprite(PLAYER, cx - 20, baseY + hop(time / 200), "#2ff3ff");
-  sprite(PLAYER, cx - 12, baseY + 2 + hop(time / 230 + 1), "#2ff3ff");
-  sprite(PLAYER, cx + 10, baseY + hop(time / 210 + 2), "#ffe23b");
-  sprite(PLAYER, cx + 18, baseY + 2 + hop(time / 240 + 3), "#ffe23b");
-  // Ball: Bogen von links nach rechts und zurück
-  const p = t < 1 ? t : 2 - t;
-  const bx = cx - 18 + p * 36;
-  const by = baseY - 2 - Math.sin(p * Math.PI) * 18;
-  px(bx, by, "#ffffff", 2, 2);
-  px(bx, baseY + 4, "rgba(0,0,0,.4)", 2, 1);
 }
 
 function animate(time) {

@@ -3,9 +3,9 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#0b0614">
-  <title>Beach Volley Arcade</title>
-  <meta name="description" content="Beachvolleyball-Turnier im Schweizer System – im Stil eines 80er-Jahre-Spielautomaten.">
+  <meta name="theme-color" content="#000000">
+  <title>Beach Volley Battle</title>
+  <meta name="description" content="Beachvolleyball-Turnier im Schweizer System – im Stil eines 8-Bit-Prügelspiels.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
@@ -17,24 +17,14 @@
 
   <main class="cabinet">
     <header class="marquee">
-<pre class="logo" aria-label="Beach Volley">
-██████╗ ███████╗ █████╗  ██████╗██╗  ██╗
-██╔══██╗██╔════╝██╔══██╗██╔════╝██║  ██║
-██████╔╝█████╗  ███████║██║     ███████║
-██╔══██╗██╔══╝  ██╔══██║██║     ██╔══██║
-██████╔╝███████╗██║  ██║╚██████╗██║  ██║
-╚═════╝ ╚══════╝╚═╝  ╚═╝ ╚═════╝╚═╝  ╚═╝</pre>
-<pre class="logo logo-2" aria-hidden="true">
-██╗   ██╗ ██████╗ ██╗     ██╗     ███████╗██╗   ██╗
-██║   ██║██╔═══██╗██║     ██║     ██╔════╝╚██╗ ██╔╝
-██║   ██║██║   ██║██║     ██║     █████╗   ╚████╔╝
-╚██╗ ██╔╝██║   ██║██║     ██║     ██╔══╝    ╚██╔╝
- ╚████╔╝ ╚██████╔╝███████╗███████╗███████╗   ██║
-  ╚═══╝   ╚═════╝ ╚══════╝╚══════╝╚══════╝   ╚═╝</pre>
-      <p class="tagline">* SWISS SYSTEM TOURNAMENT * 1986 *</p>
+      <h1 class="game-title" aria-label="Beach Volley Battle">
+        <span class="gt-top">BEACH VOLLEY</span>
+        <span class="gt-main">BATTLE</span>
+      </h1>
+      <p class="tagline">- SWISS SYSTEM CHAMPIONSHIP -</p>
     </header>
 
-    <canvas id="scene" width="96" height="40" aria-hidden="true"></canvas>
+    <canvas id="scene" width="128" height="64" aria-hidden="true"></canvas>
 
     <!-- Startbildschirm -->
     <section id="attract" class="screen">
@@ -47,9 +37,15 @@
     <!-- Hauptbildschirm -->
     <section id="game" class="screen" hidden>
       <div class="hud">
-        <span id="hud-round">ROUND 0</span>
-        <span id="hud-courts">COURTS 0/0</span>
-        <span id="hud-players">PLAYERS 0</span>
+        <div class="hud-side">
+          <span id="hud-round">ROUND 0</span>
+          <div class="bar" title="Fertige Courts"><div id="hud-bar" class="bar-fill"></div></div>
+        </div>
+        <div id="hud-courts" class="hud-timer" title="Fertige Courts">0/0</div>
+        <div class="hud-side right">
+          <span id="hud-players">PLAYERS 0</span>
+          <div class="bar"><div class="bar-fill full"></div></div>
+        </div>
       </div>
 
       <nav class="tabs" role="tablist">
@@ -121,6 +117,7 @@
   </main>
 
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+  <div id="announce" class="announce" aria-hidden="true" hidden></div>
 
   <!-- SHOW: Vollbild-Diashow der laufenden Partien (z.B. auf Laptop/TV am Spielfeldrand) -->
   <div id="show" class="show" hidden>
@@ -190,7 +187,7 @@
   |   COACH JONAS  *40*  |
   |______________________|</pre>
       <p class="tagline-small">NO PAIN · NO GAIN · NO MERCY — THIS SUMMER ON COURT 1</p>
-      <p class="small">TIPP: IM TERMINAL «jonas» EINGEBEN</p>
+      <p class="small">PRESS START TO BATTLE · TAB 40! = 8-BIT-SOUNDTRACK</p>
     </div>
   </template>
   <script src="app.js"></script>

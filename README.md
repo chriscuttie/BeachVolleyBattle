@@ -45,8 +45,8 @@ Pause:    Hugo  (+2 Punkte)
 
 ## Arcade-Version im Browser (GitHub Pages)
 
-`web/` enthält eine Webseite im Stil eines 80er-Jahre-Spielautomaten (Neon, CRT-Scanlines,
-Pixel-Szene, 8-Bit-Sounds, Highscore-Tabelle). Darin läuft **derselbe Python-Code** via
+`web/` enthält eine Webseite im Look eines 8-Bit-Prügelspiels (NES-Farben, Strand-Arena mit
+Kämpfern, Lebensbalken, Ansagen wie „ROUND 1 … FIGHT!“ und „K.O.!“, 8-Bit-Sounds, VS-Bildschirm). Darin läuft **derselbe Python-Code** via
 [Pyodide](https://pyodide.org) direkt im Browser – kein Server nötig, funktioniert auch auf dem Handy.
 
 - **RUNDE**: Teams per Knopf vorschlagen lassen (Zufall / ähnlich / gemischt) oder mit
