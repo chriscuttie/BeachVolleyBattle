@@ -45,7 +45,8 @@ Pause:    Hugo  (+2 Punkte)
 
 ## Arcade-Version im Browser (GitHub Pages)
 
-`web/` enthält eine Webseite im Look eines 8-Bit-Prügelspiels (NES-Farben, Strand-Arena mit
+`web/` enthält eine Webseite im Look eines 16-Bit-Prügelspiels (SNES-Stil: dunkel, Metall und Gold,
+Strand-Arena bei Nacht mit Skyline, Neonschild, Maschendrahtzaun, brennenden Fässern und zwei
 Kämpfern, Lebensbalken, Ansagen wie „ROUND 1 … FIGHT!“ und „K.O.!“, 8-Bit-Sounds, VS-Bildschirm). Darin läuft **derselbe Python-Code** via
 [Pyodide](https://pyodide.org) direkt im Browser – kein Server nötig, funktioniert auch auf dem Handy.
 

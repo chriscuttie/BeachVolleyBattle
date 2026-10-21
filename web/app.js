@@ -618,10 +618,10 @@ function avatar(name, size = "") {
 function pixelFace(c, name) {
   const h = hashString(name);
   const pick = (list, shift) => list[(h >>> shift) % list.length];
-  const bg = pick(["#3cbcfc", "#f8b800", "#58d854", "#f878f8", "#fc7460", "#6888fc"], 0);
+  const bg = pick(["#2d6cdf", "#b5111a", "#3a2a58", "#1f6a4a", "#8a5a10", "#5a2a6a"], 0);
   const skin = pick(["#fce0a8", "#fcb8a0", "#e4a46c", "#ac7c00", "#fca044"], 3);
   const hair = pick(["#000000", "#503000", "#ac7c00", "#a81000", "#7c7c7c", "#f8b800"], 6);
-  const shirt = pick(["#0058f8", "#d82800", "#00a800", "#6844fc", "#000000"], 9);
+  const shirt = pick(["#e9e6f2", "#1a1420", "#f2c14e", "#2c2a33", "#e0262f"], 9);
   const long = (h >>> 12) & 1;
   const map = [
     "............",
@@ -906,73 +906,55 @@ function showTab(name) {
   sfx.blip();
 }
 
-// ------------------------------------------------------------------ Pixel-Szene (Kampf-Arena am Strand)
+// ------------------------------------------------------------------ Pixel-Szene (16-Bit-Arena: Strand bei Nacht)
 
 const scene = $("#scene");
 const ctx = scene.getContext("2d");
-const W = scene.width; // 128
-const H = scene.height; // 64
-const C = {
-  black: "#000000", white: "#fcfcfc", sky1: "#0058f8", sky2: "#3cbcfc", sky3: "#a4e4fc", sun: "#fce0a8",
-  sea1: "#0000bc", sea2: "#0058f8", sand1: "#fce0a8", sand2: "#e4a46c", trunk: "#ac7c00", leaf: "#00a800",
-  leaf2: "#58d854", fence: "#7c7c7c", skin: "#fca044", red: "#d82800", blue: "#0058f8", yellow: "#f8b800",
-};
-const HORIZON = 26;
-const PALM = [
-  "...LLL..LLL....",
-  "..LLLLLLLLLLL..",
-  ".LL..LLTLL..LL.",
-  "L.....LTL.....L",
-  "......LT.......",
-  ".......T.......",
-  ".......T.......",
-  "......T........",
-  "......T........",
-  "......T........",
-  ".....T.........",
-  ".....T.........",
-  ".....T.........",
-  "....TT.........",
-];
-// Kämpfer in Kampfhaltung (schaut nach rechts). H Haar, B Stirnband, S Haut, E Auge, O Anzug, K Gürtel
+const W = scene.width; // 256
+const H = scene.height; // 128
+const HORIZON = 70; // Unterkante Skyline / Beginn Meer
+const GROUND = 100; // Beginn Sand
+
+// Kämpfer (schaut nach rechts): k Umriss, H/h Haar, B/b Stirnband, S/s Haut, T/t Oberteil, P/p Hose, G Handschuh, W Gurt/Schuh
 const FIGHTER = [
-  "....HHHH....",
-  "...HHHHHHB..",
-  "...BBBBBBBB.",
-  "...SSSSSS...",
-  "...SSSSES...",
-  "....SSSS....",
-  "..OOOOOOOSS.",
-  ".SOOOOOOOSS.",
-  ".SSOOOOOO...",
-  "...OOOOOO...",
-  "...KKKKKK...",
-  "...OOO.OO...",
-  "..OOO...OO..",
-  "..OO.....OO.",
-  ".OO.......OO",
-  ".SS.......SS",
+  "......kkkk......",
+  ".....kHHHHk.....",
+  "....kHHHHHHk....",
+  "..bbkBBBBBBk....",
+  ".b..kSSSSSSk....",
+  "....kSSSkSSk....",
+  "....kSSSSSsk....",
+  ".....ksSSsk.....",
+  "......kSSk......",
+  "...kkkTTTTkkk...",
+  "..kSSTTTTTTSSkk.",
+  ".kSSkTTTTTTkSSGk",
+  ".kSkkTTtTTTkkkGk",
+  "kGGk.kTTtTTk..k.",
+  "kGGk.kTTTTTk....",
+  ".kk..kkWWWkk....",
+  ".....kPPPPPk....",
+  "....kPPPkPPPk...",
+  "....kPPk.kPPk...",
+  "...kPPk...kPPk..",
+  "...kPpk...kPpk..",
+  "..kPPk.....kPPk.",
+  "..kPpk.....kPpk.",
+  "..kSSk.....kSSk.",
+  ".kWWWk....kWWWk.",
+  ".kkkkk....kkkkk.",
 ];
-const PLANE = [
-  "#.......",
-  "##..##..",
-  "########",
-  ".##..##.",
-];
-// 3x5-Pixelschrift für das Banner
-const FONT = {
-  H: ["#.#", "#.#", "###", "#.#", "#.#"], A: [".#.", "#.#", "###", "#.#", "#.#"],
-  P: ["##.", "#.#", "##.", "#..", "#.."], Y: ["#.#", "#.#", ".#.", ".#.", ".#."],
-  J: ["..#", "..#", "..#", "#.#", ".#."], O: [".#.", "#.#", "#.#", "#.#", ".#."],
-  N: ["#.#", "###", "###", "#.#", "#.#"], S: [".##", "#..", ".#.", "..#", "##."],
-  4: ["#.#", "#.#", "###", "..#", "..#"], 0: ["###", "#.#", "#.#", "#.#", "###"],
-  B: ["##.", "#.#", "##.", "#.#", "##."], I: ["###", ".#.", ".#.", ".#.", "###"],
-  R: ["##.", "#.#", "##.", "#.#", "#.#"], T: ["###", ".#.", ".#.", ".#.", ".#."],
-  D: ["##.", "#.#", "#.#", "#.#", "##."], L: ["#..", "#..", "#..", "#..", "###"],
-  E: ["###", "#..", "##.", "#..", "###"],
-  "!": [".#.", ".#.", ".#.", "...", ".#."], " ": ["...", "...", "...", "...", "..."],
+const P1 = { k: "#0a0610", H: "#1a1420", B: "#e0262f", b: "#7a0d14", S: "#f2b98a", s: "#b97650", T: "#e9e6f2",
+  t: "#9e9ab4", P: "#2d50a0", p: "#18285e", G: "#e0262f", W: "#f2c14e" };
+const P2 = { k: "#0a0610", H: "#b0201a", B: "#f2c14e", b: "#8a5a10", S: "#d79a6a", s: "#9a5e36", T: "#2c2a33",
+  t: "#15141a", P: "#7a0d14", p: "#3d050b", G: "#2d6cdf", W: "#e9e6f2" };
+const PLANE_FONT = {
+  A: [".#.", "#.#", "###", "#.#", "#.#"], B: ["##.", "#.#", "##.", "#.#", "##."], D: ["##.", "#.#", "#.#", "#.#", "##."],
+  E: ["###", "#..", "##.", "#..", "###"], H: ["#.#", "#.#", "###", "#.#", "#.#"], I: ["###", ".#.", ".#.", ".#.", "###"],
+  L: ["#..", "#..", "#..", "#..", "###"], R: ["##.", "#.#", "##.", "#.#", "#.#"], T: ["###", ".#.", ".#.", ".#.", ".#."],
+  Y: ["#.#", "#.#", ".#.", ".#.", ".#."], 4: ["#.#", "#.#", "###", "..#", "..#"], 0: ["###", "#.#", "#.#", "#.#", "###"],
+  " ": ["...", "...", "...", "...", "..."],
 };
-const BANNER = "BIRTHDAY BATTLE 40!";
 
 function px(x, y, color, w = 1, h = 1) {
   ctx.fillStyle = color;
@@ -989,81 +971,192 @@ function sprite(rows, x, y, colors, flip = false) {
   });
 }
 
+function text3x5(str, x, y, color) {
+  [...str].forEach((ch, k) => sprite(PLANE_FONT[ch] || PLANE_FONT[" "], x + k * 4, y, color));
+}
+
+// Feste Zufallswerte (Skyline, Fenster, Publikum) – sieht bei jedem Laden gleich aus
+function seeded(seed) {
+  return () => {
+    seed = (seed + 0x6d2b79f5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+const seedRand = seeded(40);
+const BUILDINGS = [];
+for (let x = 0; x < W;) {
+  const w = 14 + Math.floor(seedRand() * 22);
+  const h = 14 + Math.floor(seedRand() * 34);
+  const windows = [];
+  for (let wy = HORIZON - h + 4; wy < HORIZON - 3; wy += 5) {
+    for (let wx = x + 3; wx < x + w - 3; wx += 4) {
+      if (seedRand() < 0.38) windows.push([wx, wy, seedRand() < 0.15]);
+    }
+  }
+  BUILDINGS.push({ x, w, h, shade: seedRand() < 0.5 ? "#1a1230" : "#140d26", windows });
+  x += w + (seedRand() < 0.3 ? 2 : 0);
+}
+const SIGN_BUILDING = BUILDINGS.reduce((a, b) => (b.x > 120 && b.x < 200 && b.h > a.h ? b : a), { h: 0 });
+const STARS = Array.from({ length: 40 }, () => [Math.floor(seedRand() * W), Math.floor(seedRand() * 40), seedRand()]);
+const CROWD = Array.from({ length: 34 }, (_, i) => ({ x: 4 + i * 7.5 + seedRand() * 3, h: seedRand(), arm: seedRand() < 0.35, tone: seedRand() }));
+
+function lerpColor(a, b, t) {
+  const pa = a.match(/\w\w/g).map((v) => parseInt(v, 16));
+  const pb = b.match(/\w\w/g).map((v) => parseInt(v, 16));
+  return "#" + pa.map((v, i) => Math.round(v + (pb[i] - v) * t).toString(16).padStart(2, "0")).join("");
+}
+
 function drawScene(time) {
-  // Himmel in Bändern mit NES-typischem Schachbrett-Übergang
-  const bands = [[0, 9, C.sky1], [9, 18, C.sky2], [18, HORIZON, C.sky3]];
-  for (const [y0, y1, color] of bands) px(0, y0, color, W, y1 - y0);
-  for (const [y, upper] of [[9, C.sky1], [18, C.sky2]]) {
-    for (let x = 0; x < W; x += 2) px(x + (y % 2), y, upper);
+  // Nachthimmel: Verlauf in Stufen (16-Bit-Banding)
+  const stops = ["#07051a", "#1a0f3a", "#3a1650", "#6a1f4e"];
+  for (let y = 0; y < HORIZON; y += 3) {
+    const t = Math.floor((y / HORIZON) * 12) / 12;
+    const seg = Math.min(2, Math.floor(t * 3));
+    px(0, y, lerpColor(stops[seg], stops[seg + 1], t * 3 - seg), W, 3);
   }
-  // Sonne und Wolken
-  for (let dy = -6; dy <= 6; dy++) {
-    const half = Math.floor(Math.sqrt(36 - dy * dy));
-    px(100 - half, 12 + dy, C.sun, half * 2 + 1, 1);
+  for (const [sx, sy, ph] of STARS) {
+    if (Math.sin(time / 500 + ph * 20) > -0.3) px(sx, sy, ph > 0.8 ? "#ffffff" : "#9c8fc8");
   }
-  const cloud = (cx, cy) => { px(cx, cy, C.white, 10, 2); px(cx + 2, cy - 2, C.white, 5, 2); px(cx + 7, cy - 1, C.white, 4, 1); };
-  const drift = (time / 400) % (W + 20);
-  cloud(((20 + drift) % (W + 20)) - 20, 6);
-  cloud(((70 + drift * 0.6) % (W + 20)) - 20, 15);
-  // Meer mit Wellen
-  px(0, HORIZON, C.sea1, W, 6);
-  px(0, HORIZON + 2, C.sea2, W, 2);
-  for (let k = 0; k < 9; k++) {
-    const x = (k * 15 + time / 90) % W;
-    px(x, HORIZON + 1 + (k % 3) * 2, C.white, 3, 1);
+  // Mond
+  for (let dy = -11; dy <= 11; dy++) {
+    const half = Math.floor(Math.sqrt(121 - dy * dy));
+    px(36 - half, 22 + dy, dy < -3 ? "#fff6d8" : "#f2e2b0", half * 2 + 1, 1);
   }
-  // Publikum hinter der Bande: Köpfe hüpfen
-  const crowdY = HORIZON + 6;
-  px(0, crowdY, "#503000", W, 6);
-  const shirts = [C.red, C.blue, C.yellow, "#00a800", "#f878f8", C.white];
-  for (let x = 1; x < W; x += 4) {
-    const k = x / 4;
-    const jump = Math.sin(time / 180 + k * 1.7) > 0.6 ? -1 : 0;
-    px(x, crowdY + 2 + jump, shirts[k % shirts.length], 3, 4);
-    px(x + 0.5, crowdY + jump, k % 3 ? C.skin : C.sand1, 2, 2);
+  px(30, 18, "#d9c690", 4, 3); px(40, 26, "#d9c690", 3, 3); px(34, 28, "#d9c690", 2, 2);
+
+  // Skyline mit Fenstern
+  for (const b of BUILDINGS) {
+    px(b.x, HORIZON - b.h, b.shade, b.w, b.h);
+    px(b.x, HORIZON - b.h, "#2a1d45", b.w, 1);
+    for (const [wx, wy, flick] of b.windows) {
+      const on = !flick || Math.sin(time / 300 + wx * 3.1 + wy) > -0.2;
+      if (on) px(wx, wy, (wx + wy) % 3 ? "#ffcf5a" : "#ff9a3c", 2, 2);
+    }
   }
-  px(0, crowdY + 6, C.fence, W, 2);
-  px(0, crowdY + 6, C.white, W, 1);
-  // Sand
-  const sandY = crowdY + 8;
-  px(0, sandY, C.sand1, W, H - sandY);
-  for (let y = sandY + 1; y < H; y += 3) {
-    for (let x = (y * 7) % 6; x < W; x += 6) px(x, y, C.sand2);
+  // Neonschild auf dem höchsten Haus
+  if (SIGN_BUILDING.h) {
+    const label = "BIRTHDAY BATTLE 40";
+    const sw = label.length * 4 + 5;
+    const sx = Math.max(2, Math.min(W - sw - 2, SIGN_BUILDING.x + SIGN_BUILDING.w / 2 - sw / 2));
+    const sy = HORIZON - SIGN_BUILDING.h - 13;
+    px(sx + 4, sy + 11, "#2a1d45", 1, 2); px(sx + sw - 5, sy + 11, "#2a1d45", 1, 2);
+    px(sx, sy, "#120a1c", sw, 11);
+    const flicker = Math.sin(time / 90) > 0.93 || Math.sin(time / 1700) > 0.985;
+    if (!flicker) {
+      ctx.globalAlpha = 0.35;
+      px(sx - 2, sy - 2, "#ff2f8e", sw + 4, 15);
+      ctx.globalAlpha = 1;
+    }
+    px(sx, sy, "#ff2f8e", sw, 1); px(sx, sy + 10, "#ff2f8e", sw, 1);
+    px(sx, sy, "#ff2f8e", 1, 11); px(sx + sw - 1, sy, "#ff2f8e", 1, 11);
+    text3x5(label, sx + 3, sy + 3, flicker ? "#5a1838" : (Math.floor(time / 600) % 2 ? "#ffd1ea" : "#ff7ac0"));
   }
-  // Palmen
-  const palm = { L: C.leaf, T: C.trunk };
-  sprite(PALM, 1, HORIZON - 7, palm);
-  sprite(PALM, W - 16, HORIZON - 7, palm, true);
+
+  // Meer mit Mondspiegelung
+  for (let y = HORIZON; y < HORIZON + 10; y += 2) px(0, y, y % 4 ? "#0c1240" : "#121a55", W, 2);
+  for (let k = 0; k < 7; k++) {
+    const wob = Math.sin(time / 300 + k) * 3;
+    px(30 + wob - k, HORIZON + 1 + k, "#f2e2b0", 8 + k, 1);
+  }
+
+  // Publikum (Silhouetten) hinter dem Maschendrahtzaun
+  const fenceTop = HORIZON + 8;
+  px(0, fenceTop, "#0b0712", W, GROUND - fenceTop);
+  for (const c of CROWD) {
+    const jump = Math.sin(time / 170 + c.x) > 0.55 ? -2 : 0;
+    const top = fenceTop + 6 + Math.floor(c.h * 4) + jump;
+    const body = c.tone > 0.5 ? "#231833" : "#1b1229";
+    px(c.x, top + 4, body, 6, GROUND - top - 4);
+    px(c.x + 1, top, c.tone > 0.7 ? "#3a2a48" : "#2c2040", 4, 4);
+    if (c.arm) px(c.x + (c.tone > 0.5 ? -1 : 6), top - 3 + jump, body, 1, 7);
+  }
+  // Zaun
+  for (let y = fenceTop; y < GROUND; y++) {
+    for (let x = (y % 4); x < W; x += 4) {
+      if ((x + y) % 8 === 0 || (x - y + 800) % 8 === 0) px(x, y, "#5a5870");
+    }
+  }
+  px(0, fenceTop, "#8a88a0", W, 1);
+  for (let x = 6; x < W; x += 40) px(x, fenceTop, "#6a6880", 2, GROUND - fenceTop);
+
+  // Sand bei Nacht mit Lichtkegeln der Laternen
+  for (let y = GROUND; y < H; y++) {
+    const t = (y - GROUND) / (H - GROUND);
+    px(0, y, lerpColor("#4a3638", "#7a5a48", t), W, 1);
+  }
+  for (const lx of [40, 216]) {
+    for (let y = GROUND; y < H; y++) {
+      const half = Math.floor(10 + (y - GROUND) * 1.4);
+      ctx.globalAlpha = 0.22 + 0.14 * ((y - GROUND) / (H - GROUND));
+      px(lx - half, y, "#ffcf7a", half * 2, 1);
+    }
+    ctx.globalAlpha = 1;
+  }
+  for (let y = GROUND + 2; y < H; y += 4) {
+    for (let x = (y * 5) % 9; x < W; x += 9) px(x, y, "#2a1e24");
+  }
+  // Laternen
+  for (const lx of [40, 216]) {
+    px(lx - 1, 48, "#2a2836", 2, GROUND - 46);
+    px(lx - 5, 46, "#3a3848", 10, 3);
+    px(lx - 3, 49, "#fff1b0", 6, 2);
+    ctx.globalAlpha = 0.1;
+    ctx.fillStyle = "#ffcf7a";
+    ctx.beginPath();
+    ctx.moveTo(lx - 3, 50); ctx.lineTo(lx + 3, 50); ctx.lineTo(lx + 26, GROUND + 6); ctx.lineTo(lx - 26, GROUND + 6);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+  // Brennende Ölfässer
+  for (const bx of [6, W - 20]) {
+    px(bx, 104, "#0a0610", 14, 20);
+    px(bx + 1, 105, "#6a3218", 12, 18);
+    px(bx + 1, 105, "#8a4a24", 3, 18);
+    px(bx + 1, 109, "#3a1a0c", 12, 2); px(bx + 1, 117, "#3a1a0c", 12, 2);
+    for (let fx = 0; fx < 12; fx++) {
+      const h = 4 + Math.floor((Math.sin(time / 70 + fx * 1.9 + bx) + 1) * 4 + (fx % 3));
+      px(bx + 1 + fx, 104 - h, "#d81920", 1, h);
+      px(bx + 1 + fx, 104 - h + 2, "#ff6a12", 1, Math.max(0, h - 2));
+      if (fx > 2 && fx < 10) px(bx + 1 + fx, 104 - h + 4, "#ffd23f", 1, Math.max(0, h - 4));
+    }
+    ctx.globalAlpha = 0.14;
+    px(bx - 10, 92, "#ff6a12", 34, 34);
+    ctx.globalAlpha = 1;
+  }
+
   // Netz
   const cx = W / 2;
-  px(cx - 1, crowdY + 1, C.white, 1, H - crowdY - 6);
-  px(cx, crowdY + 1, C.black, 1, H - crowdY - 6);
-  for (let y = crowdY + 2; y < crowdY + 9; y += 2) px(cx - 1, y, C.fence, 2, 1);
-  px(cx - 1, crowdY + 1, C.white, 2, 1);
-  // Kämpfer in Kampfhaltung (wippen im Takt)
-  const baseY = H - 18;
-  const bob = (phase) => (Math.floor(time / 260 + phase) % 2 ? 1 : 0);
-  sprite(FIGHTER, cx - 34, baseY + bob(0), { H: C.black, B: C.red, S: C.skin, E: C.black, O: C.blue, K: C.black });
-  sprite(FIGHTER, cx + 22, baseY + bob(1), { H: "#a81000", B: C.yellow, S: C.skin, E: C.black, O: C.red, K: C.black }, true);
-  // Ball: Bogen über das Netz und zurück
-  const t = (time / 1500) % 2;
+  px(cx - 1, 84, "#c8c6d8", 2, 40);
+  px(cx - 1, 84, "#f3efe6", 2, 2);
+  for (let y = 86; y < 100; y += 2) px(cx - 1, y, "#5a5870", 2, 1);
+  px(cx - 1, 100, "#f3efe6", 2, 1);
+
+  // Kämpfer: wippen in Kampfhaltung
+  const baseY = H - 28;
+  const bob = (phase) => (Math.floor(time / 240 + phase) % 2 ? 1 : 0);
+  px(cx - 66, H - 3, "rgba(0,0,0,.45)", 16, 2);
+  px(cx + 50, H - 3, "rgba(0,0,0,.45)", 16, 2);
+  sprite(FIGHTER, cx - 66, baseY + bob(0), P1);
+  sprite(FIGHTER, cx + 50, baseY + bob(1), P2, true);
+
+  // Ball: Bogen über das Netz
+  const t = (time / 1600) % 2;
   const p = t < 1 ? t : 2 - t;
-  const bx = cx - 22 + p * 44;
-  const by = baseY + 2 - Math.sin(p * Math.PI) * 26;
-  px(bx - 1, by - 1, C.black, 4, 4);
-  px(bx, by, C.white, 2, 2);
-  px(bx, H - 3, "rgba(0,0,0,.35)", 3, 1);
-  // Flugzeug mit Geburtstagsbanner
-  const bannerW = BANNER.length * 4 + 3;
-  const span = W + bannerW + 20;
-  const bx0 = W - ((time / 45) % (span + 60));
-  if (bx0 > -bannerW - 14) {
-    sprite(PLANE, bx0 - 1, 3, C.white, true);
-    px(bx0 + 7, 5, C.black, 4, 1);
-    px(bx0 + 11, 1, C.black, bannerW + 2, 11);
-    px(bx0 + 12, 2, C.yellow, bannerW, 9);
-    [...BANNER].forEach((ch, k) => sprite(FONT[ch] || FONT[" "], bx0 + 14 + k * 4, 4, C.red));
-  }
+  const ballX = cx - 46 + p * 92;
+  const ballY = baseY + 6 - Math.sin(p * Math.PI) * 44;
+  px(ballX - 2, ballY - 1, "#0a0610", 6, 4); px(ballX - 1, ballY - 2, "#0a0610", 4, 6);
+  px(ballX - 1, ballY - 1, "#f3efe6", 4, 4);
+  px(ballX, ballY - 1, "#f2c14e", 1, 4);
+  px(ballX - 1, H - 4, "rgba(0,0,0,.35)", 4, 1);
+
+  // Vignette
+  const g = ctx.createRadialGradient(W / 2, H / 2, H * 0.4, W / 2, H / 2, W * 0.62);
+  g.addColorStop(0, "rgba(0,0,0,0)");
+  g.addColorStop(1, "rgba(0,0,0,.55)");
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, W, H);
 }
 
 function animate(time) {
